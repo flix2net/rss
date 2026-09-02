@@ -1,0 +1,15 @@
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Local output from the CLI export mode
+out/
+*.output.json
+*.output.csv
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

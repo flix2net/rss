@@ -1,0 +1,8 @@
+# Normalise line endings so the repo is LF regardless of contributor platform.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

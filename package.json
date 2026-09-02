@@ -1,0 +1,48 @@
+{
+  "name": "rss-feed-extractor",
+  "version": "1.0.0",
+  "description": "Free, local, zero-dependency RSS/Atom/JSON Feed extractor with a web GUI. A self-hosted drop-in replacement for paid feed-scraping actors.",
+  "type": "module",
+  "license": "MIT",
+  "main": "src/cli.js",
+  "bin": {
+    "rss-feed-extractor": "src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "dev": "node --watch src/cli.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "files": [
+    "src",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "rss",
+    "rss-parser",
+    "atom",
+    "json-feed",
+    "feed",
+    "feed-reader",
+    "extractor",
+    "scraper",
+    "gui",
+    "no-dependencies",
+    "zero-dependency",
+    "offline"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_USERNAME/rss-feed-extractor.git"
+  },
+  "author": "rss-feed-extractor contributors",
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/rss-feed-extractor/issues"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/rss-feed-extractor#readme"
+}
