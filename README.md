@@ -2,6 +2,8 @@
 
 A **free, local, zero-dependency** RSS / Atom / JSON Feed extractor with a web GUI.
 
+Project page: **<https://flix2net.github.io/rss/>**
+
 It does the job of hosted feed-scraping actors (you paste feed URLs, you get clean structured items back)
 without an account, an API key, a run quota, or your URLs being sent through anyone else's servers.
 

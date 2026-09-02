@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rss-feed-extractor — free, local, zero-dependency feed extraction</title>
+<meta name="description" content="A free, local, zero-dependency RSS / Atom / JSON Feed extractor with a web GUI. A self-hosted drop-in replacement for paid feed-scraping actors.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f0883e'/><circle cx='10' cy='22' r='2.6' fill='white'/><path d='M10 15.5a6.5 6.5 0 0 1 6.5 6.5M10 9a13 13 0 0 1 13 13' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round'/></svg>">
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --muted: #6b645c;
+    --line: #e3ded6;
+    --accent: #c25d15;
+    --accent-soft: #fdf1e7;
+    --code-bg: #22201d;
+    --code-ink: #f2ede6;
+    --ok: #1f7a4d;
+    --maxw: 62rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15140f;
+      --panel: #1d1b17;
+      --ink: #ece7df;
+      --muted: #a49b90;
+      --line: #302c26;
+      --accent: #f0883e;
+      --accent-soft: #2a2015;
+      --code-bg: #0e0d0a;
+      --code-ink: #ece7df;
+      --ok: #56c98a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  code, pre, .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 1.25rem; }
+
+  header.site {
+    display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: .55rem; font-weight: 650; letter-spacing: -.01em; }
+  .brand svg { width: 22px; height: 22px; flex: none; }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 1.1rem; font-size: .92rem; }
+  nav a:hover { color: var(--ink); }
+  @media (max-width: 40rem) { nav { width: 100%; } nav a { margin: 0 1rem 0 0; } }
+
+  .hero { padding: 4.5rem 0 3.25rem; }
+  h1 {
+    font-size: clamp(2.1rem, 5.5vw, 3.3rem);
+    line-height: 1.1; letter-spacing: -.025em; margin: 0 0 1rem; font-weight: 700;
+  }
+  .lede { font-size: clamp(1.05rem, 2.2vw, 1.25rem); color: var(--muted); max-width: 44rem; margin: 0 0 1.9rem; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+  .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 2rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .45rem;
+    padding: .68rem 1.15rem; border-radius: 9px;
+    text-decoration: none; font-weight: 600; font-size: .95rem;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.07); }
+  .btn:hover { border-color: var(--muted); }
+
+  .facts { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .fact {
+    font-size: .8rem; padding: .28rem .62rem; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    border: 1px solid rgba(194, 93, 21, .25);
+  }
+
+  section { padding: 2.9rem 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.6rem; letter-spacing: -.015em; margin: 0 0 .5rem; }
+  h3 { font-size: 1.05rem; margin: 0 0 .35rem; }
+  .sub { color: var(--muted); margin: 0 0 1.75rem; max-width: 46rem; }
+
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 1.05rem 1.15rem; border-radius: 10px; overflow-x: auto;
+    font-size: .855rem; line-height: 1.6; margin: 0 0 1rem;
+  }
+  pre .c { color: #8b8579; }
+  pre .k { color: #f0883e; }
+  code.inl { background: var(--accent-soft); color: var(--accent); padding: .1rem .38rem; border-radius: 5px; font-size: .885em; }
+
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 1.15rem 1.2rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .93rem; }
+  .card .n { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+  th, td { text-align: left; padding: .62rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .84rem; text-transform: uppercase; letter-spacing: .04em; }
+  td.yes { color: var(--ok); font-weight: 600; }
+  td.no { color: var(--muted); }
+  .scroll { overflow-x: auto; }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 1rem 1.15rem; border-radius: 0 9px 9px 0; margin: 0 0 1.5rem;
+  }
+  .callout p { margin: 0; }
+  .callout strong { color: var(--accent); }
+
+  ul.tight { margin: 0; padding-left: 1.15rem; color: var(--muted); }
+  ul.tight li { margin: .3rem 0; }
+  ul.checks { list-style: none; padding: 0; margin: 0; }
+  ul.checks li { padding-left: 1.5rem; position: relative; margin: .5rem 0; }
+  ul.checks li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
+
+  footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; color: var(--muted); font-size: .88rem; }
+  footer .row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="site">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#c25d15"/><circle cx="10" cy="22" r="2.6" fill="#fff"/><path d="M10 15.5a6.5 6.5 0 0 1 6.5 6.5M10 9a13 13 0 0 1 13 13" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>
+      rss-feed-extractor
+    </div>
+    <nav>
+      <a href="#install">Install</a>
+      <a href="#usage">Usage</a>
+      <a href="#output">Output</a>
+      <a href="#handles">What it handles</a>
+      <a href="#security">Security</a>
+      <a href="https://github.com/flix2net/rss">GitHub</a>
+    </nav>
+  </header>
+</div>
+
+<div class="hero wrap">
+  <h1>Paste feed URLs.<br>Get clean structured items back.</h1>
+  <p class="lede">A <strong>free, local, zero-dependency</strong> RSS / Atom / JSON Feed extractor with a web GUI. It does the job of hosted feed-scraping actors — without an account, an API key, a run quota, or your URL list being sent through anyone else's servers.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/flix2net/rss/archive/refs/heads/main.zip">Download .zip</a>
+    <a class="btn" href="https://github.com/flix2net/rss">View on GitHub</a>
+    <a class="btn" href="#install">Quick start</a>
+  </div>
+  <div class="facts">
+    <span class="fact">Node 18.17+</span>
+    <span class="fact">0 dependencies</span>
+    <span class="fact">no npm install</span>
+    <span class="fact">~100 KB</span>
+    <span class="fact">46 tests</span>
+    <span class="fact">MIT licensed</span>
+  </div>
+</div>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">There is nothing to install. Every feature uses Node built-ins (<code class="inl">node:http</code>, <code class="inl">node:fs</code>, global <code class="inl">fetch</code>). No packages, no build step, no native modules.</p>
+<pre><span class="c"># clone, then run — no npm install step</span>
+git clone https://github.com/flix2net/rss.git
+<span class="k">cd</span> rss
+node src/cli.js        <span class="c"># opens http://127.0.0.1:5055</span></pre>
+    <p>On Windows, after cloning, just <strong>double-click <code class="inl">start.bat</code></strong>.</p>
+    <div class="callout">
+      <p><strong>This page is documentation only.</strong> The GUI needs the Node server that ships in this repo — GitHub Pages serves static files and cannot run it. Run <code class="inl">node src/cli.js</code> locally and the interface opens in about a second.</p>
+    </div>
+  </div>
+</section>
+
+<section id="usage">
+  <div class="wrap">
+    <h2>Usage</h2>
+    <p class="sub">A browser GUI for interactive work, and a headless CLI for scripts and pipelines. Both speak the same options.</p>
+    <h3>GUI</h3>
+<pre>node src/cli.js                 <span class="c"># start the server and open a browser</span>
+node src/cli.js --port 8080     <span class="c"># pick a port (auto-increments if busy)</span>
+node src/cli.js --no-open       <span class="c"># don't launch a browser</span>
+node src/cli.js --host 0.0.0.0  <span class="c"># expose on your LAN (see Security)</span></pre>
+    <p>Paste feed URLs one per line, set <strong>Max items per feed</strong>, press <strong>Start</strong> (<code class="inl">Ctrl+Enter</code> works too). Then filter, sort, read full text inline and export. Your input is remembered in <code class="inl">localStorage</code>.</p>
+    <h3>Headless</h3>
+<pre>node src/cli.js extract https://feeds.bbci.co.uk/news/rss.xml --max 10
+node src/cli.js extract feeds.txt --format csv --out news.csv
+node src/cli.js extract https://x.example/feed --format ndjson | jq -r .title
+node src/cli.js extract a.xml b.xml c.xml --no-content --errors</pre>
+    <p>Exit code is <code class="inl">1</code> if every feed failed, <code class="inl">2</code> for bad arguments — safe to use in CI.</p>
+  </div>
+</section>
+
+<section id="output">
+  <div class="wrap">
+    <h2>Output shape</h2>
+    <p class="sub"><code class="inl">items[]</code> is flat across all feeds, so it drops straight into a spreadsheet or a <code class="inl">jq</code> pipeline. Export as JSON, CSV, NDJSON or Markdown.</p>
+<pre>{
+  <span class="k">"items"</span>: [{
+    <span class="k">"type"</span>: "feed_item",
+    <span class="k">"feedUrl"</span>: "https://www.theverge.com/rss/index.xml",
+    <span class="k">"feedTitle"</span>: "The Verge",
+    <span class="k">"title"</span>: "The robot butler dream doesn't have legs",
+    <span class="k">"link"</span>: "https://www.theverge.com/tech/987756/...",
+    <span class="k">"author"</span>: "Jennifer Pattison Tuohy",
+    <span class="k">"categories"</span>: ["Analysis", "IFA 2026", "Tech"],
+    <span class="k">"pubDate"</span>: "2026-09-02T11:00:00.000Z",   <span class="c">// normalised ISO-8601, or null</span>
+    <span class="k">"pubDateRaw"</span>: "2026-09-02T07:00:00-04:00",
+    <span class="k">"summary"</span>: "The idea of humanoid robots running our homes...",
+    <span class="k">"contentSnippet"</span>: "LG's CLOiD is a robot housekeeper on wheels...",
+    <span class="k">"image"</span>: "https://platform.theverge.com/wp-content/uploads/...jpg",
+    <span class="k">"audio"</span>: null,
+    <span class="k">"enclosures"</span>: [{ "url": "...", "mimeType": "audio/mpeg", "lengthBytes": 123 }],
+    <span class="k">"content"</span>: "&lt;figure&gt;...",
+    <span class="k">"contentText"</span>: "LG's CLOiD is a robot..."
+  }],
+  <span class="k">"errors"</span>: [{ "type": "error", "feedUrl": "...", "error": "HTTP 404 Not Found",
+               "code": "http_status", "status": 404 }],
+  <span class="k">"feeds"</span>: [{ "feedUrl": "...", "ok": true, "items": 4, "bytes": 25695, "elapsedMs": 1247 }],
+  <span class="k">"stats"</span>: { "requested": 2, "succeeded": 2, "failed": 0, "totalItems": 8, "durationMs": 328 }
+}</pre>
+    <p>A failed feed never aborts the batch — it lands in <code class="inl">errors</code> with a machine-readable <code class="inl">code</code>: <code class="inl">timeout</code>, <code class="inl">network_error</code>, <code class="inl">http_status</code>, <code class="inl">blocked_host</code>, <code class="inl">too_large</code>, <code class="inl">empty_body</code>, <code class="inl">invalid_url</code>, <code class="inl">parse_failed</code>.</p>
+  </div>
+</section>
+
+<section id="handles">
+  <div class="wrap">
+    <h2>What it handles</h2>
+    <p class="sub">The parsing layer is the actual substance of this project, so it is deliberately forgiving — real feeds are malformed far more often than spec-compliant.</p>
+    <div class="grid">
+      <div class="card"><h3>Four formats</h3><p>RSS 2.0, Atom 1.0, RSS 1.0 / RDF, and JSON Feed 1.0 &amp; 1.1.</p></div>
+      <div class="card"><h3>Namespaces by URI</h3><p><code class="inl">content:encoded</code>, <code class="inl">dc:*</code>, <code class="inl">media:content</code>/<code class="inl">group</code> (YouTube, Vimeo), <code class="inl">itunes:*</code>, <code class="inl">slash:*</code>, <code class="inl">georss:*</code> — with a fallback for feeds that forget to declare prefixes.</p></div>
+      <div class="card"><h3>Encodings</h3><p>Honours HTTP <code class="inl">charset</code> and the XML declaration, maps <code class="inl">iso-8859-1</code> → <code class="inl">windows-1252</code> per the WHATWG spec, handles BOMs, gzip/deflate/br and redirects.</p></div>
+      <div class="card"><h3>Dates</h3><p>RFC 822, ISO 8601 with and without a zone, two-digit years, and Unix timestamps in seconds or milliseconds.</p></div>
+      <div class="card"><h3>Broken markup</h3><p>Unclosed leaf tags are implicitly closed, entities missing their semicolon are repaired, stray close tags ignored, <code class="inl">script</code>/<code class="inl">style</code> bodies dropped rather than leaked as text.</p></div>
+      <div class="card"><h3>Thumbnails</h3><p>Media RSS → <code class="inl">&lt;image&gt;</code> → <code class="inl">itunes:image</code> → image enclosures → <code class="inl">&lt;img&gt;</code> inside content HTML, largest first.</p></div>
+    </div>
+
+    <h3 style="margin-top:2.2rem">Against a hosted actor</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th></th><th>Hosted actor</th><th>This tool</th></tr></thead>
+      <tbody>
+        <tr><td>Cost</td><td>subscription / credits</td><td class="yes">free, MIT</td></tr>
+        <tr><td>Setup</td><td>account + API token</td><td class="yes">Node.js, no <code class="inl">npm install</code></td></tr>
+        <tr><td>Privacy</td><td class="no">feed list visible to a third party</td><td class="yes">stays on localhost</td></tr>
+        <tr><td>Item ceiling</td><td class="no">plan-dependent</td><td>500 per feed, yours to change</td></tr>
+        <tr><td>Runs offline</td><td class="no">no</td><td class="yes">yes (feeds need network)</td></tr>
+        <tr><td>Install size</td><td class="no">—</td><td class="yes">~100 KB, zero dependencies</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section id="security">
+  <div class="wrap">
+    <h2>Security</h2>
+    <p class="sub">A local server that fetches URLs on request is an SSRF risk if you are careless about it. These guards are on by default.</p>
+    <ul class="checks">
+      <li>Binds <code class="inl">127.0.0.1</code> only. <code class="inl">--host 0.0.0.0</code> exposes it to your network, and the tool has <strong>no authentication</strong> — trusted LAN only.</li>
+      <li><code class="inl">POST /api/extract</code> requires an <code class="inl">x-rss-extractor</code> header, forcing a CORS preflight no third-party site can pass, so a random webpage cannot get this server to fetch URLs for it.</li>
+      <li>Loopback, RFC1918, CGNAT and link-local targets (including <code class="inl">169.254.169.254</code>) are refused unless you opt in with <code class="inl">allowPrivate</code>.</li>
+      <li>Feed HTML is never injected into the DOM: the GUI renders every field through <code class="inl">textContent</code>, and a Content-Security-Policy blocks remote scripts.</li>
+      <li>CSV export prefixes cells starting with <code class="inl">= + - @</code> so Excel will not evaluate them as formulas.</li>
+      <li>No telemetry, no update checks, no network calls except the feeds you name.</li>
+    </ul>
+    <h3 style="margin-top:2rem">Limits</h3>
+    <p>500 items per feed · 200 feeds per request · 12 MB per feed document · 20 s default timeout · 1 MB request body. All are single constants in <code class="inl">LIMITS</code> (<code class="inl">src/feed.js</code>) — edit and restart.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Development</h2>
+<pre>node --test        <span class="c"># 46 tests, no framework to install</span></pre>
+    <p>Tests cover the parser against hand-written malformed fixtures, plus a real HTTP round-trip against a local fixture server (charset decoding, gzip, 404s, timeouts, the CSRF guard, path traversal).</p>
+    <p>Contributing: fork it, branch off <code class="inl">main</code>, add a fixture to <code class="inl">test/feed.test.js</code> for any parsing behaviour you change, and open a PR. <code class="inl">node --test</code> must pass.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <span>MIT licensed · <a href="https://github.com/flix2net/rss">flix2net/rss</a></span>
+    <span>Node.js 18.17+ · zero runtime dependencies</span>
+  </div>
+</footer>
+
+</body>
+</html>
