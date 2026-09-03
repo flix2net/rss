@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { build } from '../tools/build-site.js';
+import { BROWSER_MODULES } from '../src/browser-modules.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP = path.join(ROOT, 'docs', 'app');
@@ -24,7 +25,7 @@ before(() => {
   appHtml = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
 });
 
-const SHIPPED = ['xml.js', 'feed.js', 'hosted.js'];
+const SHIPPED = BROWSER_MODULES;
 
 test('the committed app exists where Pages will serve it', () => {
   assert.ok(fs.existsSync(path.join(APP, 'index.html')));

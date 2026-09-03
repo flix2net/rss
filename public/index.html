@@ -321,6 +321,13 @@
               <option value="">load sample…</option>
             </select>
           </div>
+          <div class="url-count" style="margin-top:8px">
+            <button class="btn-ghost btn-sm" id="importOpml" type="button" title="Read feed URLs out of an OPML file">Import OPML</button>
+            <button class="btn-ghost btn-sm" id="exportOpml" type="button" title="Save the current list as OPML">Export OPML</button>
+            <input type="file" id="opmlFile" accept=".opml,text/xml,application/xml,text/plain" class="hidden">
+            <span class="spacer"></span>
+            <span class="field-hint" id="opmlStatus"></span>
+          </div>
         </div>
 
         <label class="field">
@@ -459,6 +466,7 @@ const state = {
   busy: false,
   abort: null,
   timer: null,
+  opml: [],
 };
 
 let EMPTY_STATE = null;
@@ -518,6 +526,68 @@ function refreshUrlCount() {
   $('urlCount').textContent = `${valid.length} feed${valid.length === 1 ? '' : 's'}`;
   $('urlInvalid').textContent = invalid ? `${invalid} unparseable` : '';
   $('start').disabled = state.busy || valid.length === 0;
+}
+
+/* ------------------------------------------------------------------- opml */
+
+const OPML_STORE = 'rfe.opml';
+const OPML_STORE_CAP = 500;
+
+function saveOpmlList(feeds) {
+  try {
+    localStorage.setItem(OPML_STORE, JSON.stringify((feeds ?? []).slice(0, OPML_STORE_CAP)));
+  } catch { /* quota — folder info is a nicety, not a requirement */ }
+}
+
+function restoreOpmlList() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OPML_STORE) ?? '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function importOpml(file) {
+  const { parseOpml, looksLikeOpml, untitledFeeds } = await loadModules();
+  const text = await file.text();
+  if (!looksLikeOpml(text)) throw new Error(`${file.name} does not look like OPML`);
+
+  const { feeds, folders, warnings } = parseOpml(text);
+  if (!feeds.length) throw new Error(warnings.join(' ') || `No feeds found in ${file.name}`);
+
+  state.opml = feeds;
+  saveOpmlList(feeds);
+  $('feedUrls').value = feeds.map((f) => f.url).join('\n');
+  refreshUrlCount();
+  saveForm();
+
+  const untitled = untitledFeeds(feeds).length;
+  const bits = [`${feeds.length} feeds`, folders.length ? `${folders.length} folders` : '',
+    untitled ? `${untitled} untitled` : ''].filter(Boolean);
+  $('opmlStatus').textContent = `${file.name}: ${bits.join(', ')}`;
+  if (warnings.length) toast(warnings[0]);
+}
+
+/**
+ * The URL textarea is the source of truth for what runs; the imported OPML only
+ * supplies titles and folders, and is joined back onto it so hand-edits win.
+ */
+function currentFeedRecords() {
+  const { valid } = parseUrls($('feedUrls').value);
+  const known = new Map((state.opml ?? []).map((f) => [f.url, f]));
+  return valid.map((url) => known.get(url) ?? { title: url, url, siteUrl: null, folder: null });
+}
+
+async function exportOpml() {
+  const { toOpml } = await loadModules();
+  const feeds = currentFeedRecords();
+  if (!feeds.length) {
+    toast('Nothing to export — add feed URLs first');
+    return;
+  }
+  download('subscriptions.opml', toOpml(feeds), 'text/x-opml;charset=utf-8');
+  $('opmlStatus').textContent = `exported ${feeds.length} feeds`;
 }
 
 /* --------------------------------------------------------------- running */
@@ -1142,6 +1212,7 @@ function boot() {
   $('endpoint').textContent = location.host;
   EMPTY_STATE = $('emptyState');
   restoreForm();
+  state.opml = restoreOpmlList();
 
   for (const [name, urls] of Object.entries(PRESETS)) {
     const opt = el('option', null, name);
@@ -1193,6 +1264,21 @@ function boot() {
   });
   document.querySelectorAll('[data-export]').forEach((btn) => {
     btn.addEventListener('click', () => exportAs(btn.dataset.export));
+  });
+
+  $('importOpml').addEventListener('click', () => $('opmlFile').click());
+  $('opmlFile').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      await importOpml(file);
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  $('exportOpml').addEventListener('click', () => {
+    exportOpml().catch((err) => toast(err.message));
   });
 
   let searchTimer;

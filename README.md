@@ -70,14 +70,17 @@ node src/cli.js --no-open       # don't launch a browser
 node src/cli.js --host 0.0.0.0  # expose on your LAN (see Security)
 ```
 
-Paste feed URLs (one per line), set **Max items per feed**, press **Start** (`Ctrl+Enter` works too).
-Then filter, sort, read full text inline, and export. Your input is remembered in `localStorage`.
+Paste feed URLs (one per line), or press **Import OPML** to load a subscription export — folders are
+kept so **Export OPML** gives you the same structure back. Set **Max items per feed**, press **Start**
+(`Ctrl+Enter` works too). Then filter, sort, read full text inline, and export. Your input is
+remembered in `localStorage`.
 
 ### Headless / scripts
 
 ```bash
 node src/cli.js extract https://feeds.bbci.co.uk/news/rss.xml --max 10
 node src/cli.js extract feeds.txt --format csv --out news.csv      # feeds.txt: one URL per line
+node src/cli.js extract subscriptions.opml --max 5                 # OPML expanded automatically
 node src/cli.js extract https://x.example/feed --format ndjson | jq -r .title
 node src/cli.js extract a.xml b.xml c.xml --no-content --errors    # omit bodies, log failures
 ```
@@ -180,6 +183,8 @@ src/
   export.js   JSON / CSV / NDJSON / Markdown serialisation
   cli.js      argument parsing, serve and extract modes
   hosted.js   browser-only helpers for the hosted build (no Node built-ins)
+  opml.js     OPML import/export, folder-preserving (no Node built-ins)
+  browser-modules.js  allowlist of files the GUI may import from /lib
 public/
   index.html  the GUI (inline CSS + JS, no bundler, no CDN)
 docs/

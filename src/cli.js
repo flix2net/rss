@@ -13,6 +13,7 @@ import { startServer } from './server.js';
 import { extractFeeds } from './extract.js';
 import { toCsv, toJson, toMarkdown } from './export.js';
 import { LIMITS } from './feed.js';
+import { parseOpml, looksLikeOpml } from './opml.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8'));
@@ -45,6 +46,10 @@ EXAMPLES
   node src/cli.js
   node src/cli.js extract https://feeds.bbci.co.uk/news/rss.xml --max 10
   node src/cli.js extract feeds.txt --format csv --out news.csv
+  node src/cli.js extract subscriptions.opml --max 5
+
+Inputs may be URLs, a plain text file of URLs (one per line, # to comment), or
+an OPML outline file, which is expanded to its feed URLs automatically.
 `.trimStart();
 
 function parseArgs(argv) {
@@ -78,14 +83,31 @@ function openBrowser(url) {
   }
 }
 
-/** Turns the positional arguments (URLs, @file references) into a URL list. */
+/**
+ * Turns positional arguments into a URL list. Accepts bare URLs, `@file` and
+ * plain paths. A file that sniffs as OPML is expanded to its feed URLs instead
+ * of being read line-by-line, so `extract mysubs.opml` does the obvious thing.
+ */
 function collectUrls(positional) {
   const urls = [];
   for (const entry of positional) {
-    if (entry.startsWith('@') && fs.existsSync(entry.slice(1))) {
-      urls.push(...fs.readFileSync(entry.slice(1), 'utf8').split(/\r?\n/));
-    } else {
+    const pathish = entry.startsWith('@') ? entry.slice(1) : entry;
+    if (!fs.existsSync(pathish) || !fs.statSync(pathish).isFile()) {
+      if (entry.startsWith('@')) {
+        process.stderr.write(`error: cannot read @${pathish}\n`);
+        continue;
+      }
       urls.push(entry);
+      continue;
+    }
+    const text = fs.readFileSync(pathish, 'utf8');
+    if (looksLikeOpml(text) || /\.opml$/i.test(pathish)) {
+      const { feeds, warnings } = parseOpml(text);
+      for (const warning of warnings) process.stderr.write(`opml: ${warning}\n`);
+      process.stderr.write(`opml: ${feeds.length} feed(s) read from ${pathish}\n`);
+      urls.push(...feeds.map((f) => f.url));
+    } else {
+      urls.push(...text.split(/\r?\n/));
     }
   }
   return urls.filter((u) => u && u.trim() && !u.trim().startsWith('#'));

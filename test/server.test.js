@@ -6,6 +6,7 @@ import { gzipSync } from 'node:zlib';
 import { startServer } from '../src/server.js';
 import { extractFeeds } from '../src/extract.js';
 import { fetchFeed, isPrivateHost, normalizeFeedUrl, mapLimit } from '../src/fetcher.js';
+import { BROWSER_MODULES } from '../src/browser-modules.js';
 
 const FEED = (n) => `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Fixture</title><link>http://127.0.0.1/f</link>
@@ -207,6 +208,34 @@ test('the GUI is served and path traversal is blocked', async () => {
     const res = await fetch(`${appUrl}${attack}`);
     assert.ok(res.status === 404 || res.status === 400, `${attack} returned ${res.status}`);
     assert.ok(!(await res.text()).includes('"dependencies"'), `${attack} leaked package.json`);
+  }
+});
+
+test('the /lib route serves exactly the allowlisted browser modules', async () => {
+  for (const name of BROWSER_MODULES) {
+    const res = await fetch(`${appUrl}/lib/${name}`);
+    assert.equal(res.status, 200, `/lib/${name} should be served`);
+    // A wrong MIME type makes the browser refuse the ES module import.
+    assert.match(res.headers.get('content-type'), /javascript/, `${name} MIME`);
+    const body = await res.text();
+    assert.equal(/node:/.test(body), false, `/lib/${name} must be browser-safe`);
+  }
+
+  const feed = await fetch(`${appUrl}/lib/feed.js`);
+  assert.match(await feed.text(), /export function parseFeed/);
+});
+
+test('/lib cannot be used to read the source tree', async () => {
+  for (const probe of ['/lib/server.js', '/lib/cli.js', '/lib/package.json', '/lib/browser-modules.js']) {
+    const res = await fetch(`${appUrl}${probe}`);
+    assert.equal(res.status, 404, `${probe} should not be served`);
+  }
+
+  // Encoded traversal survives URL() normalisation and must still miss the allowlist.
+  for (const probe of ['/lib/%2e%2e/package.json', '/lib/..%2fserver.js', '/lib/../package.json']) {
+    const res = await fetch(`${appUrl}${probe}`);
+    assert.ok(res.status === 404 || res.status === 400, `${probe} returned ${res.status}`);
+    assert.ok(!(await res.text()).includes('"dependencies"'), `${probe} leaked package.json`);
   }
 });
 

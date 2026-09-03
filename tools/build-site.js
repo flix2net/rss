@@ -16,11 +16,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { BROWSER_MODULES } from '../src/browser-modules.js';
+
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'docs', 'app');
-
-/** Files the hosted GUI imports at runtime, in dependency order. */
-const PARSER_FILES = ['xml.js', 'feed.js', 'hosted.js'];
 
 function rel(...parts) {
   return path.join(ROOT, ...parts);
@@ -46,23 +45,22 @@ export function build() {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(path.join(OUT, 'lib'), { recursive: true });
 
-  const gui = { from: 'public/index.html', to: 'app/index.html' };
-  fs.copyFileSync(rel(gui.from), path.join(OUT, 'index.html'));
+  fs.copyFileSync(rel('public', 'index.html'), path.join(OUT, 'index.html'));
 
-  const lib = PARSER_FILES.map((file) => {
+  const lib = BROWSER_MODULES.map((file) => {
     assertBrowserSafe(file);
     fs.copyFileSync(rel('src', file), path.join(OUT, 'lib', file));
     return { file, bytes: fs.statSync(path.join(OUT, 'lib', file)).size };
   });
 
-  return { out: OUT, gui: gui.from, guiBytes: fs.statSync(path.join(OUT, 'index.html')).size, lib };
+  return { out: OUT, guiBytes: fs.statSync(path.join(OUT, 'index.html')).size, lib };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = build();
   const total = result.lib.reduce((sum, m) => sum + m.bytes, 0) + result.guiBytes;
   process.stdout.write(
-    `docs/app/ built from ${result.gui}: `
+    `docs/app/ built: index.html + `
     + `lib [${result.lib.map((m) => `${m.file} ${Math.round(m.bytes / 1024)} KB`).join(', ')}]\n`
     + `app payload ≈ ${Math.round(total / 1024)} KB, zero dependencies, served at /rss/app/\n`,
   );

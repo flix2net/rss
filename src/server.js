@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { extractFeeds, DEFAULTS } from './extract.js';
 import { LIMITS } from './feed.js';
+import { BROWSER_MODULES } from './browser-modules.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, '..', 'public');
@@ -85,6 +86,24 @@ function serveStatic(res, urlPath) {
   });
 }
 
+/**
+ * Serves the GUI's ES modules out of src/ so the local and hosted builds run the
+ * identical file. An allowlist, not a directory: /lib must not become a way to
+ * browse the source tree.
+ */
+function serveLib(res, name) {
+  if (!BROWSER_MODULES.includes(name)) {
+    return send(res, 404, 'Not found', { 'content-type': 'text/plain; charset=utf-8' });
+  }
+  fs.readFile(path.join(HERE, name), (err, data) => {
+    if (err) return send(res, 404, 'Not found', { 'content-type': 'text/plain; charset=utf-8' });
+    send(res, 200, data, {
+      'content-type': 'application/javascript; charset=utf-8',
+      'cache-control': 'no-cache',
+    });
+  });
+}
+
 export function createServer() {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
@@ -112,6 +131,10 @@ export function createServer() {
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return send(res, 404, 'Not found', { 'content-type': 'text/plain; charset=utf-8' });
+    }
+    if (url.pathname.startsWith('/lib/')) {
+      // URL() has already resolved any "..", so this is a bare filename.
+      return serveLib(res, url.pathname.slice('/lib/'.length));
     }
     if (url.pathname === '/favicon.ico') {
       return send(res, 204, '');
