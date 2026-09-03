@@ -4,6 +4,8 @@ A **free, local, zero-dependency** RSS / Atom / JSON Feed extractor with a web G
 
 Project page: **<https://flix2net.github.io/rss/>**
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/flix2net/rss?quickstart=1)
+
 It does the job of hosted feed-scraping actors (you paste feed URLs, you get clean structured items back)
 without an account, an API key, a run quota, or your URLs being sent through anyone else's servers.
 
@@ -15,6 +17,17 @@ node src/cli.js    ← open http://127.0.0.1:5055 and you're running
 On Windows you can just **double-click `start.bat`**.
 
 <!-- ![rss-feed-extractor GUI](docs/screenshot.png)  ← uncomment once docs/screenshot.png exists -->
+
+### No Node handy? Run it on GitHub
+
+The badge above opens a throwaway Codespace with the GUI already running: it checks out the repo,
+runs the 46 tests, starts the server on port 5055, and forwards it to your browser. Nothing is
+installed from npm — there is nothing to install. The forwarded port is **private**, so only your
+GitHub account can reach it.
+
+This is a convenience trial, not a hosted service. The tool's actual point is that it runs on *your*
+machine, and a Codespace burns core-hours while it is idle — stop it when you are done
+(`gh codespace stop -a`, or the Codespaces tab).
 
 ---
 

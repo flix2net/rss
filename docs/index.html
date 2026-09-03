@@ -152,6 +152,7 @@
   <p class="lede">A <strong>free, local, zero-dependency</strong> RSS / Atom / JSON Feed extractor with a web GUI. It does the job of hosted feed-scraping actors — without an account, an API key, a run quota, or your URL list being sent through anyone else's servers.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/flix2net/rss/archive/refs/heads/main.zip">Download .zip</a>
+    <a class="btn" href="https://codespaces.new/flix2net/rss?quickstart=1">Try it hosted &rarr;</a>
     <a class="btn" href="https://github.com/flix2net/rss">View on GitHub</a>
     <a class="btn" href="#install">Quick start</a>
   </div>
@@ -175,7 +176,7 @@ git clone https://github.com/flix2net/rss.git
 node src/cli.js        <span class="c"># opens http://127.0.0.1:5055</span></pre>
     <p>On Windows, after cloning, just <strong>double-click <code class="inl">start.bat</code></strong>.</p>
     <div class="callout">
-      <p><strong>This page is documentation only.</strong> The GUI needs the Node server that ships in this repo — GitHub Pages serves static files and cannot run it. Run <code class="inl">node src/cli.js</code> locally and the interface opens in about a second.</p>
+      <p><strong>This page is documentation only.</strong> The GUI needs the Node server that ships in this repo &mdash; GitHub Pages serves static files and cannot run it, and a browser cannot fetch feeds directly because RSS endpoints send no CORS headers. Run <code class="inl">node src/cli.js</code> locally and the interface opens in about a second. No Node on that machine? <a href="https://codespaces.new/flix2net/rss?quickstart=1">Open a Codespace</a> and the server starts itself, on a private forwarded port.</p>
     </div>
   </div>
 </section>

@@ -1,0 +1,21 @@
+{
+  "name": "rss-feed-extractor",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22",
+
+  "forwardPorts": [5055],
+  "portsAttributes": {
+    "5055": {
+      "label": "RSS Extractor GUI",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+
+  "postCreateCommand": "node --test",
+  "postStartCommand": "node src/cli.js --no-open --port 5055 --quiet",
+
+  "hostRequirements": {
+    "cpus": 1,
+    "memory": "1gb"
+  }
+}
