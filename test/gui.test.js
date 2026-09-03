@@ -55,10 +55,11 @@ test('no remote scripts, fonts or CDNs are referenced', () => {
   assert.equal(/<script[^>]+\bsrc\s*=/.test(html), false, 'external script tag found');
 });
 
-test('CSP allows same-origin plus a workers.dev relay, and nothing else', () => {
+test('CSP allows same-origin, a workers.dev relay and the demo endpoint, nothing else', () => {
   const connectSrc = html.match(/connect-src\s+([^;"]+)/)?.[1]?.trim();
   assert.ok(connectSrc, 'connect-src must be declared');
-  assert.deepEqual(connectSrc.split(/\s+/).sort(), ["'self'", 'https://*.workers.dev']);
+  assert.deepEqual(connectSrc.split(/\s+/).sort(),
+    ["'self'", 'https://*.workers.dev', 'https://api.rss2json.com']);
 
   // The hosted build loads the parser via a same-origin dynamic import, which
   // needs 'self' in script-src; dropping it would break the Pages deployment.

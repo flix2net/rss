@@ -20,7 +20,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'docs', 'app');
 
 /** Files the hosted GUI imports at runtime, in dependency order. */
-const PARSER_FILES = ['xml.js', 'feed.js'];
+const PARSER_FILES = ['xml.js', 'feed.js', 'hosted.js'];
 
 function rel(...parts) {
   return path.join(ROOT, ...parts);

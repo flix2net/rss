@@ -161,7 +161,7 @@
     <span class="fact">0 dependencies</span>
     <span class="fact">no npm install</span>
     <span class="fact">~100 KB</span>
-    <span class="fact">67 tests</span>
+    <span class="fact">79 tests</span>
     <span class="fact">MIT licensed</span>
   </div>
 </div>
@@ -176,7 +176,7 @@ git clone https://github.com/flix2net/rss.git
 node src/cli.js        <span class="c"># opens http://127.0.0.1:5055</span></pre>
     <p>On Windows, after cloning, just <strong>double-click <code class="inl">start.bat</code></strong>.</p>
     <div class="callout">
-      <p><strong>This page is documentation only.</strong> The GUI needs somewhere to run the fetch, and GitHub Pages serves static files. It is not a missing feature: no real feed sends <code class="inl">Access-Control-Allow-Origin</code>, so a browser cannot read one directly either. Two ways to use the interface: <a href="./app/"><strong>open the hosted app</strong></a> and point it at <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">your own free relay Worker</a> (about 15 lines, deployed by pasting into the Cloudflare editor), or run <code class="inl">node src/cli.js</code> locally, where the server does the fetching itself and nothing leaves your machine.</p>
+      <p><a href="./app/"><strong>The hosted app</strong></a> works the moment you open it — no account, no install. It runs in <em>demo mode</em>, reading feeds through rss2json, because no real feed sends <code class="inl">Access-Control-Allow-Origin</code> and Pages runs no server. Demo mode caps at 10 items per feed and your feed URLs are visible to rss2json. Point the app at <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">your own relay</a> to lift that, or run <code class="inl">node src/cli.js</code> locally, where the server does the fetching itself and nothing leaves your machine.</p>
     </div>
   </div>
 </section>
@@ -282,7 +282,7 @@ node src/cli.js extract a.xml b.xml c.xml --no-content --errors</pre>
 <section>
   <div class="wrap">
     <h2>Development</h2>
-<pre>node --test        <span class="c"># 67 tests, no framework to install</span></pre>
+<pre>node --test        <span class="c"># 79 tests, no framework to install</span></pre>
     <p>Tests cover the parser against hand-written malformed fixtures, plus a real HTTP round-trip against a local fixture server (charset decoding, gzip, 404s, timeouts, the CSRF guard, path traversal).</p>
     <p>Contributing: fork it, branch off <code class="inl">main</code>, add a fixture to <code class="inl">test/feed.test.js</code> for any parsing behaviour you change, and open a PR. <code class="inl">node --test</code> must pass.</p>
   </div>

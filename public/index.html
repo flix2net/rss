@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.workers.dev; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.workers.dev https://api.rss2json.com; base-uri 'none'; form-action 'none'">
 <title>RSS Feed Extractor — local</title>
 <style>
   :root {
@@ -287,14 +287,24 @@
       <div class="card-body">
 
         <div class="field hidden" id="relayPanel">
-          <div class="field-label">Relay URL <span class="req">*</span>
-            <span class="field-hint">this page has no server of its own</span>
+          <div class="field-label">Relay URL
+            <span class="field-hint">optional</span>
           </div>
           <input type="url" id="relayUrl" spellcheck="false" placeholder="https://rss-relay.YOUR-SUBDOMAIN.workers.dev">
-          <p class="field-note" id="relayNote">
-            Feeds send no CORS headers, so a browser cannot read them directly. Paste the URL of your
-            own <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">relay Worker</a>.
-            Until then, run the tool locally with <code class="inl">node src/cli.js</code>.
+          <p class="field-note">
+            Leave blank to use the built-in demo. Paste the URL of your own
+            <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">relay Worker</a>
+            to lift the limits below and get full fidelity.
+          </p>
+        </div>
+
+        <div class="field hidden" id="demoNotice">
+          <p class="field-note">
+            <strong>Demo mode.</strong> Feeds send no CORS headers, so with no relay of your own this
+            page reads them through <a href="https://rss2json.com" target="_blank" rel="noreferrer">rss2json</a>
+            &mdash; the only free, no-account endpoint still answering. That means: <strong>10 items per
+            feed</strong> regardless of the setting below, a shared daily quota, and the feed URLs you
+            paste are visible to them. The local CLI has none of these limits.
           </p>
         </div>
 
@@ -535,7 +545,7 @@ function setBusy(busy) {
  *          through the user's own CORS relay and parsed in this tab, by the
  *          same feed.js the CLI uses.
  */
-const runtime = { mode: 'server', parser: null };
+const runtime = { mode: 'server', modules: null };
 
 async function detectMode() {
   try {
@@ -549,13 +559,15 @@ async function detectMode() {
 }
 
 function applyMode() {
-  const relay = runtime.mode === 'relay';
-  $('relayPanel').classList.toggle('hidden', !relay);
+  const hosted = runtime.mode === 'relay';
+  const own = hosted && Boolean(relayBase());
+  $('relayPanel').classList.toggle('hidden', !hosted);
+  $('demoNotice').classList.toggle('hidden', !hosted || own);
   // The relay enforces its own private-host block, so this toggle would lie.
-  $('allowPrivate').disabled = relay;
-  if (relay) $('allowPrivate').checked = false;
-  $('status-pill').textContent = relay ? 'hosted · relay needed' : 'ready';
-  $('status-pill').className = relay && !relayBase() ? 'pill warn' : 'pill ok';
+  $('allowPrivate').disabled = hosted;
+  if (hosted) $('allowPrivate').checked = false;
+  $('status-pill').textContent = !hosted ? 'ready' : own ? 'hosted · own relay' : 'hosted · demo';
+  $('status-pill').className = hosted && !own ? 'pill warn' : 'pill ok';
 }
 
 /** Normalised origin+path of the configured relay, or null when unusable. */
@@ -574,9 +586,15 @@ function relayBase() {
   return url;
 }
 
-async function loadParser() {
-  if (!runtime.parser) runtime.parser = await import('./lib/feed.js');
-  return runtime.parser;
+async function loadModules() {
+  if (!runtime.modules) {
+    const [feed, hosted] = await Promise.all([
+      import('./lib/feed.js'),
+      import('./lib/hosted.js'),
+    ]);
+    runtime.modules = { ...feed, ...hosted };
+  }
+  return runtime.modules;
 }
 
 /** Mirrors detectEncoding() in src/fetcher.js with browser-available decoders. */
@@ -630,87 +648,109 @@ async function fetchViaRelay(target, { timeoutMs, signal }) {
   }
 }
 
-/** Client-side twin of extractFeeds(); returns the identical payload shape. */
-async function extractViaRelay(body) {
-  if (!relayBase()) {
-    throw new Error('No relay URL set. Deploy worker/relay.js, paste its URL above, or run this tool locally.');
-  }
-  const { parseFeed, LIMITS } = await loadParser();
+/** Client-side twin of extractFeeds(), through the user's own relay. */
+async function extractViaRelay(body, mods) {
+  const { parseFeed, LIMITS, mapPool, assemblePayload } = mods;
   if (body.feedUrls.length > LIMITS.maxFeeds) {
     throw new Error(`Too many feeds: ${body.feedUrls.length} given, ${LIMITS.maxFeeds} is the ceiling`);
   }
-
   const startedAt = Date.now();
-  const slots = new Array(body.feedUrls.length);
-  let cursor = 0;
-
-  const worker = async () => {
-    while (cursor < body.feedUrls.length) {
-      const index = cursor++;
-      const url = body.feedUrls[index];
-      const record = { feedUrl: url, ok: false, items: 0, bytes: 0, elapsedMs: 0 };
-      try {
-        const fetched = await fetchViaRelay(url, { timeoutMs: body.timeoutMs, signal: state.abort?.signal });
-        const parsed = parseFeed(fetched.text, fetched.url, {
-          maxItemsPerFeed: body.maxItemsPerFeed,
-          includeContent: body.includeContent,
-          removeDuplicates: body.removeDuplicates,
-        });
-        record.ok = true;
-        record.items = parsed.items.length;
-        record.bytes = fetched.bytes;
-        record.elapsedMs = fetched.elapsedMs;
-        record.feed = parsed.feed;
-        record.warnings = parsed.warnings;
-        slots[index] = { record, items: parsed.items };
-      } catch (err) {
-        record.error = err?.message ?? String(err);
-        record.code = err?.code ?? 'relay_error';
-        record.status = err?.status ?? null;
-        slots[index] = { record, items: [] };
-      }
-    }
-  };
-
-  // Indexed slots keep output in input order even though fetches race.
-  await Promise.all(Array.from({ length: Math.min(body.concurrency, body.feedUrls.length) }, worker));
-
-  const feeds = [];
-  const errors = [];
-  let items = [];
-  let totalBytes = 0;
-  for (const slot of slots) {
-    feeds.push(slot.record);
-    totalBytes += slot.record.bytes || 0;
-    items = items.concat(slot.items);
-    if (!slot.record.ok) {
-      errors.push({
-        type: 'error',
-        feedUrl: slot.record.feedUrl,
-        error: slot.record.error,
-        code: slot.record.code,
-        status: slot.record.status,
+  const slots = await mapPool(body.feedUrls, body.concurrency, async (url) => {
+    const record = { feedUrl: url, ok: false, items: 0, bytes: 0, elapsedMs: 0 };
+    try {
+      const fetched = await fetchViaRelay(url, { timeoutMs: body.timeoutMs, signal: state.abort?.signal });
+      const parsed = parseFeed(fetched.text, fetched.url, {
+        maxItemsPerFeed: body.maxItemsPerFeed,
+        includeContent: body.includeContent,
+        removeDuplicates: body.removeDuplicates,
       });
+      Object.assign(record, {
+        ok: true,
+        items: parsed.items.length,
+        bytes: fetched.bytes,
+        elapsedMs: fetched.elapsedMs,
+        feed: parsed.feed,
+        warnings: parsed.warnings,
+      });
+      return { record, items: parsed.items };
+    } catch (err) {
+      record.error = err?.message ?? String(err);
+      record.code = err?.code ?? 'relay_error';
+      record.status = err?.status ?? null;
+      return { record, items: [] };
     }
+  });
+  return assemblePayload(slots, body, startedAt, 'relay');
+}
+
+/* -------------------------------------------- zero-setup demo transport */
+
+/**
+ * rss2json is the only public CORS-enabled feed endpoint still answering
+ * without an account or a card (16 were tested). It parses upstream and
+ * hard-caps unauthenticated responses, so "max items per feed" does not apply
+ * here — surfaced in the UI rather than silently ignored.
+ */
+async function fetchRss2Json(endpoint, target, { timeoutMs, signal }) {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('timeout')), timeoutMs);
+  const onAbort = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', onAbort);
+  try {
+    const res = await fetch(`${endpoint}?rss_url=${encodeURIComponent(target)}`, {
+      signal: controller.signal, mode: 'cors', credentials: 'omit',
+    });
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error('Relay returned a response that is not JSON');
+    }
+    if (json.status !== 'ok') throw new Error(json.message ?? 'rss2json returned no feed');
+    return { json, bytes: new Blob([text]).size, elapsedMs: Date.now() - startedAt };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error(signal?.aborted ? 'Cancelled' : `Timed out after ${timeoutMs} ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
+}
 
-  items.forEach((item, i) => { item.index = i + 1; });
-  const succeeded = feeds.filter((f) => f.ok).length;
+async function extractViaRss2Json(body, mods) {
+  const { mapPool, assemblePayload, rss2JsonFeed, mapRss2JsonItem, dedupe,
+    RSS2JSON_ENDPOINT, RSS2JSON_ITEM_CAP } = mods;
+  const startedAt = Date.now();
+  const slots = await mapPool(body.feedUrls, body.concurrency, async (url) => {
+    const record = { feedUrl: url, ok: false, items: 0, bytes: 0, elapsedMs: 0 };
+    try {
+      const { json, bytes, elapsedMs } = await fetchRss2Json(RSS2JSON_ENDPOINT, url, {
+        timeoutMs: body.timeoutMs, signal: state.abort?.signal,
+      });
+      const feed = rss2JsonFeed(json, url);
+      let items = (json.items ?? []).map((raw) => mapRss2JsonItem(raw, feed, url));
+      if (body.removeDuplicates) items = dedupe(items);
+      Object.assign(record, { ok: true, items: items.length, bytes, elapsedMs, feed });
+      record.warnings = [`Demo transport: capped at ${RSS2JSON_ITEM_CAP} items per feed, parsed upstream.`];
+      return { record, items };
+    } catch (err) {
+      record.error = err?.message ?? String(err);
+      record.code = err?.code ?? 'demo_transport_error';
+      record.status = err?.status ?? null;
+      return { record, items: [] };
+    }
+  });
+  return assemblePayload(slots, body, startedAt, 'rss2json');
+}
 
-  return {
-    items,
-    errors,
-    feeds,
-    stats: {
-      requested: body.feedUrls.length,
-      succeeded,
-      failed: body.feedUrls.length - succeeded,
-      totalItems: items.length,
-      totalBytes,
-      durationMs: Date.now() - startedAt,
-    },
-    options: { ...body },
-  };
+/** Picks the browser transport: own relay if configured, otherwise the demo. */
+async function extractInBrowser(body) {
+  const mods = await loadModules();
+  return relayBase() ? extractViaRelay(body, mods) : extractViaRss2Json(body, mods);
 }
 
 async function extractViaServer(body) {
@@ -748,7 +788,7 @@ async function run() {
   }, 100);
 
   try {
-    const json = runtime.mode === 'server' ? await extractViaServer(body) : await extractViaRelay(body);
+    const json = runtime.mode === 'server' ? await extractViaServer(body) : await extractInBrowser(body);
     state.payload = json;
     $('elapsed').textContent = `done in ${(json.stats?.durationMs ?? (Date.now() - startedAt)) / 1000 | 0}s · ${json.items.length} items`;
     renderAll();

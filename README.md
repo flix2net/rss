@@ -21,20 +21,22 @@ On Windows you can just **double-click `start.bat`**.
 ### Use it from a browser
 
 **<https://flix2net.github.io/rss/app/>** — the same GUI, served by GitHub Pages, opens on a phone or
-a library computer with nothing installed.
+a library computer with nothing installed, and works the moment you load it.
 
-It needs one thing you must supply: a **relay**. No real feed sends `Access-Control-Allow-Origin`
-(checked against BBC, HN, The Verge, GitHub Atom and Google News), so a browser cannot read one
-directly and Pages runs no server. Deploy [`worker/relay.js`](worker/relay.js) to Cloudflare Workers —
-free tier, 100k requests/day, no card, paste-into-the-editor to deploy — then paste its URL into the
-Relay field. It is remembered in `localStorage`, so it is a one-time setup per browser.
+No real feed sends `Access-Control-Allow-Origin` (checked against BBC, HN, The Verge, GitHub Atom and
+Google News), and Pages runs no server, so a static page cannot read a feed on its own. With nothing
+configured the app uses **demo mode**: it reads through [rss2json](https://rss2json.com), the only
+free no-account endpoint still answering a CORS request. That costs three things — **10 items per
+feed**, a shared daily quota, and your feed URLs are visible to rss2json. The app says this on screen
+rather than letting you assume it is the real thing.
 
-The relay only moves bytes; parsing still happens in your tab with the same `src/feed.js` the CLI
-uses. Your feed URLs go to a Worker you own, not to a third-party service.
+For full fidelity, deploy [`worker/relay.js`](worker/relay.js) somewhere you control and paste its
+URL into the Relay field (remembered per browser). The relay only moves bytes — parsing still happens
+in your tab with the same `src/feed.js` the CLI uses — so you get 500 items per feed back and nothing
+passes through a third party. Any host that runs those 15 lines will do.
 
-Still prefer a full local run? The Codespaces badge above starts the real server instead: it runs the
-67 tests, serves port 5055 and forwards it privately. Handy for a trial, but a Codespace burns
-core-hours while idle, so stop it when you are done (`gh codespace stop -a`).
+Or run it locally: `node src/cli.js`, or the Codespaces badge above, which starts the real server and
+forwards port 5055 privately.
 
 ---
 
@@ -177,13 +179,17 @@ src/
   server.js   localhost HTTP server + JSON API
   export.js   JSON / CSV / NDJSON / Markdown serialisation
   cli.js      argument parsing, serve and extract modes
+  hosted.js   browser-only helpers for the hosted build (no Node built-ins)
 public/
   index.html  the GUI (inline CSS + JS, no bundler, no CDN)
+docs/
+  index.html  the Pages landing page
+  app/        GENERATED — the hosted GUI + copies of the modules it imports
 worker/
-  relay.js    optional Cloudflare Worker that adds CORS for the hosted build
+  relay.js    optional CORS relay for the hosted build, for any host that runs it
 tools/
-  build-site.js  regenerates docs/app/ (the hosted GUI + its parser copy)
-test/         67 tests on node:test — parser, formats, fetcher, HTTP surface, relay, build
+  build-site.js  regenerates docs/app/ from public/ and src/
+test/         79 tests on node:test — parser, formats, fetcher, HTTP surface, relay, build
 ```
 
 ## Security
@@ -211,7 +217,7 @@ test/         67 tests on node:test — parser, formats, fetcher, HTTP surface, 
 ## Development
 
 ```bash
-node --test              # 67 tests, no framework to install
+node --test              # 79 tests, no framework to install
 node tools/build-site.js # regenerate docs/app/ after editing src/ or public/
 ```
 
