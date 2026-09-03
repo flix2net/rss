@@ -1,6 +1,6 @@
 {
   "name": "rss-feed-extractor",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Free, local, zero-dependency RSS/Atom/JSON Feed extractor with a web GUI. A self-hosted drop-in replacement for paid feed-scraping actors.",
   "type": "module",
   "license": "MIT",
