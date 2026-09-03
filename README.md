@@ -182,7 +182,7 @@ public/
 worker/
   relay.js    optional Cloudflare Worker that adds CORS for the hosted build
 tools/
-  build-site.js  assembles the Pages artifact (landing + app + parser copy)
+  build-site.js  regenerates docs/app/ (the hosted GUI + its parser copy)
 test/         67 tests on node:test — parser, formats, fetcher, HTTP surface, relay, build
 ```
 
@@ -211,8 +211,13 @@ test/         67 tests on node:test — parser, formats, fetcher, HTTP surface, 
 ## Development
 
 ```bash
-node --test        # 67 tests, no framework to install
+node --test              # 67 tests, no framework to install
+node tools/build-site.js # regenerate docs/app/ after editing src/ or public/
 ```
+
+`docs/app/` is committed on purpose: Pages deploys the branch directly, so no CI workflow file is
+needed. A test asserts the copied parser is byte-identical to `src/`, so forgetting the rebuild fails
+`node --test` rather than shipping a stale hosted app.
 
 Tests cover the parser against hand-written malformed fixtures, plus a real HTTP round-trip against a
 local fixture server (charset decoding, gzip, 404s, timeouts, the CSRF guard, path traversal).

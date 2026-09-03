@@ -1,11 +1,15 @@
 /*
- * Assembles the GitHub Pages artifact.
+ * Assembles the hosted web app under docs/app/ so GitHub Pages serves it from
+ * the existing branch deploy — no Actions workflow, and therefore no extra
+ * token scope needed to publish.
  *
- * Pages serves static files, so the hosted app needs the parser modules next to
- * it. Rather than duplicate them in the repo (which would drift), this copies
- * the real src/ files into the build output at deploy time. One source of truth.
+ * Pages serves static files only, and no real feed sends
+ * Access-Control-Allow-Origin, so the hosted GUI fetches through the user's own
+ * relay (worker/relay.js) and parses in the tab. The parser is not duplicated by
+ * hand: it is copied from src/ here, and test/site.test.js asserts the committed
+ * copy is byte-identical, so it cannot silently drift from the CLI's.
  *
- * Run directly:  node tools/build-site.js
+ * Run after changing anything in src/ or public/:  node tools/build-site.js
  */
 
 import fs from 'node:fs';
@@ -13,23 +17,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, 'site');
+const OUT = path.join(ROOT, 'docs', 'app');
 
 /** Files the hosted GUI imports at runtime, in dependency order. */
 const PARSER_FILES = ['xml.js', 'feed.js'];
 
 function rel(...parts) {
   return path.join(ROOT, ...parts);
-}
-
-function reset() {
-  fs.rmSync(OUT, { recursive: true, force: true });
-  fs.mkdirSync(path.join(OUT, 'app', 'lib'), { recursive: true });
-}
-
-function copy(from, to) {
-  fs.copyFileSync(rel(from), path.join(OUT, to));
-  return fs.statSync(path.join(OUT, to)).size;
 }
 
 /**
@@ -48,35 +42,28 @@ function assertBrowserSafe(file) {
   }
 }
 
-function copyDocs() {
-  const docsDir = rel('docs');
-  let count = 0;
-  for (const entry of fs.readdirSync(docsDir, { withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    copy(path.join('docs', entry.name), entry.name);
-    count += 1;
-  }
-  return count;
-}
-
 export function build() {
-  reset();
-  const docs = copyDocs();
-  const gui = copy(path.join('public', 'index.html'), path.join('app', 'index.html'));
+  fs.rmSync(OUT, { recursive: true, force: true });
+  fs.mkdirSync(path.join(OUT, 'lib'), { recursive: true });
+
+  const gui = { from: 'public/index.html', to: 'app/index.html' };
+  fs.copyFileSync(rel(gui.from), path.join(OUT, 'index.html'));
+
   const lib = PARSER_FILES.map((file) => {
     assertBrowserSafe(file);
-    return { file, bytes: copy(path.join('src', file), path.join('app', 'lib', file)) };
+    fs.copyFileSync(rel('src', file), path.join(OUT, 'lib', file));
+    return { file, bytes: fs.statSync(path.join(OUT, 'lib', file)).size };
   });
 
-  return { out: OUT, docs, gui, lib };
+  return { out: OUT, gui: gui.from, guiBytes: fs.statSync(path.join(OUT, 'index.html')).size, lib };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = build();
-  const total = result.lib.reduce((sum, m) => sum + m.bytes, 0) + result.gui;
+  const total = result.lib.reduce((sum, m) => sum + m.bytes, 0) + result.guiBytes;
   process.stdout.write(
-    `site/ built: ${result.docs} docs files, app/index.html (${result.gui} B), `
+    `docs/app/ built from ${result.gui}: `
     + `lib [${result.lib.map((m) => `${m.file} ${Math.round(m.bytes / 1024)} KB`).join(', ')}]\n`
-    + `app payload ≈ ${Math.round(total / 1024)} KB, zero dependencies\n`,
+    + `app payload ≈ ${Math.round(total / 1024)} KB, zero dependencies, served at /rss/app/\n`,
   );
 }

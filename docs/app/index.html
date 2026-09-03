@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.workers.dev; base-uri 'none'; form-action 'none'">
+<title>RSS Feed Extractor — local</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #fbfbfc;
+    --border: #e3e6ea;
+    --border-strong: #cdd3da;
+    --text: #14181f;
+    --muted: #67707e;
+    --faint: #8b94a3;
+    --accent: #2f6fed;
+    --accent-hover: #2358c9;
+    --accent-soft: #eaf0fe;
+    --green: #12805c;
+    --green-soft: #e2f5ee;
+    --red: #b4232a;
+    --red-soft: #fdeaea;
+    --amber: #8a5a00;
+    --amber-soft: #fdf3e0;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 8px 24px -12px rgba(16,24,40,.12);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d;
+      --panel: #1b1f27;
+      --panel-2: #20252e;
+      --border: #2c333e;
+      --border-strong: #3b4451;
+      --text: #e8ebf0;
+      --muted: #9aa4b2;
+      --faint: #77808f;
+      --accent: #5b8def;
+      --accent-hover: #7aa4f5;
+      --accent-soft: #1e2a44;
+      --green: #4ec99a;
+      --green-soft: #16302a;
+      --red: #f08a8f;
+      --red-soft: #33202300;
+      --amber: #e0b060;
+      --amber-soft: #2e2617;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    width: 30px; height: 30px; border-radius: 8px; flex: none;
+    background: linear-gradient(135deg, var(--accent), #7a4ddb);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .title { font-weight: 650; font-size: 15px; letter-spacing: -.01em; }
+  .subtitle { font-size: 12px; color: var(--muted); }
+  .top-right { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .pill {
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px;
+    background: var(--panel-2); font-size: 11.5px; color: var(--muted);
+  }
+  .pill.ok { color: var(--green); background: var(--green-soft); border-color: transparent; }
+  .pill.warn { color: var(--amber); border-color: var(--amber); }
+
+  .layout {
+    display: grid; grid-template-columns: 340px minmax(0, 1fr);
+    gap: 18px; max-width: 1500px; margin: 0 auto; padding: 18px 20px 60px;
+    align-items: start;
+  }
+  @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card + .card { margin-top: 16px; }
+  .card-head {
+    padding: 13px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-head h2 { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: .01em; }
+  .card-body { padding: 16px; }
+
+  label.field { display: block; margin-bottom: 16px; }
+  label.field:last-child { margin-bottom: 0; }
+  .field-label { display: flex; align-items: baseline; gap: 6px; font-weight: 600; font-size: 12.5px; margin-bottom: 6px; }
+  .field-hint { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+  .field-note { margin: 7px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+  .field-note a { color: var(--accent); }
+  .req { color: var(--red); }
+
+  textarea, input[type=text], input[type=url], input[type=number], select {
+    width: 100%; padding: 8px 10px; font: inherit; font-size: 13px;
+    color: var(--text); background: var(--panel);
+    border: 1px solid var(--border-strong); border-radius: 8px; outline: none;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  textarea { min-height: 132px; resize: vertical; font-family: var(--mono); font-size: 12px; line-height: 1.55; }
+  textarea:focus, input:focus, select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  input[type=number] { max-width: 110px; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .switch { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+  .switch input { position: absolute; opacity: 0; pointer-events: none; }
+  .track {
+    width: 34px; height: 20px; border-radius: 999px; background: var(--border-strong);
+    position: relative; transition: background .15s; flex: none;
+  }
+  .track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(14px); }
+  .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--accent-soft); }
+  .switch-text { font-size: 13px; }
+
+  button {
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    border-radius: 8px; border: 1px solid transparent; padding: 8px 14px;
+    transition: background .12s, border-color .12s, color .12s, opacity .12s;
+  }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; padding: 10px 14px; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-ghost { background: var(--panel); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; font-weight: 550; }
+  .btn-danger-ghost { background: var(--panel); color: var(--red); border-color: var(--border-strong); }
+
+  details.advanced { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 14px; }
+  details.advanced summary {
+    cursor: pointer; font-weight: 600; font-size: 12.5px; color: var(--muted);
+    list-style: none; display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  }
+  details.advanced summary::-webkit-details-marker { display: none; }
+  details.advanced summary::before { content: "▸"; transition: transform .12s; }
+  details.advanced[open] summary::before { transform: rotate(90deg); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .url-count { font-size: 11.5px; color: var(--muted); margin-top: 6px; display: flex; gap: 8px; align-items: center; }
+  .url-count .bad { color: var(--red); }
+
+  /* results */
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  .stat {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 11px; min-width: 74px;
+  }
+  .stat b { display: block; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .stat span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .toolbar input[type=text] { max-width: 260px; }
+  .toolbar select { max-width: 220px; width: auto; }
+  .spacer { margin-left: auto; }
+
+  .tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); border-radius: var(--radius) var(--radius) 0 0; }
+  .tab {
+    border: 0; background: none; padding: 11px 13px; font-size: 12.5px; font-weight: 550;
+    color: var(--muted); border-bottom: 2px solid transparent; border-radius: 0;
+  }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .count { font-size: 11px; color: var(--faint); margin-left: 4px; }
+
+  .results { max-height: calc(100vh - 210px); overflow: auto; }
+  .item {
+    display: flex; gap: 13px; padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .item:last-child { border-bottom: 0; }
+  .item:hover { background: var(--panel-2); }
+  .thumb {
+    width: 92px; height: 62px; border-radius: 7px; object-fit: cover; flex: none;
+    background: var(--border); border: 1px solid var(--border);
+  }
+  .item-main { min-width: 0; flex: 1; }
+  .item-title { font-size: 14px; font-weight: 600; line-height: 1.35; margin: 0 0 4px; }
+  .item-title a { color: var(--text); text-decoration: none; }
+  .item-title a:hover { color: var(--accent); text-decoration: underline; }
+  .item-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
+  .feed-tag {
+    color: var(--accent); background: var(--accent-soft); border-radius: 5px;
+    padding: 1px 7px; font-weight: 600; font-size: 11px; max-width: 220px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .item-snippet { font-size: 12.5px; color: var(--muted); margin: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .chip {
+    font-size: 10.5px; color: var(--muted); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
+  }
+  .item-body { margin-top: 9px; }
+  .item-body pre {
+    margin: 0; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--muted);
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px;
+  }
+  .expand { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; font-weight: 600; margin-top: 6px; }
+  .expand:hover { text-decoration: underline; }
+
+  .err-row { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+  .err-badge {
+    flex: none; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--red); background: var(--red-soft); border-radius: 5px; padding: 2px 7px; margin-top: 1px;
+  }
+  .err-url { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+  .err-msg { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+  table.feeds { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.feeds th, table.feeds td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  table.feeds th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; background: var(--panel-2); }
+  table.feeds td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.feeds td.u { font-family: var(--mono); font-size: 11.5px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  pre.raw {
+    margin: 0; padding: 14px 16px; font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word; max-height: calc(100vh - 260px); overflow: auto;
+  }
+
+  .empty { padding: 56px 24px; text-align: center; color: var(--muted); }
+  .empty h3 { margin: 0 0 6px; font-size: 15px; color: var(--text); font-weight: 650; }
+  .empty p { margin: 0 auto 4px; max-width: 460px; font-size: 13px; }
+  .empty code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+  .samples { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 14px; }
+
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .busy-bar { height: 2px; background: var(--accent-soft); overflow: hidden; }
+  .busy-bar i { display: block; height: 100%; width: 32%; background: var(--accent); animation: slide 1.15s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(12px);
+    background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 8px;
+    font-size: 12.5px; font-weight: 550; opacity: 0; pointer-events: none; transition: .18s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .hidden { display: none !important; }
+  .note { font-size: 11.5px; color: var(--faint); margin-top: 10px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="logo">R</div>
+  <div>
+    <div class="title">RSS Feed Extractor</div>
+    <div class="subtitle">Runs entirely on your machine — no account, no API key, no quotas</div>
+  </div>
+  <div class="top-right">
+    <span class="pill" id="endpoint">localhost</span>
+    <span class="pill ok" id="status-pill">ready</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ---------------------------------------------------------- input pane -->
+  <div>
+    <section class="card">
+      <div class="card-head"><h2>Input configuration</h2></div>
+      <div class="card-body">
+
+        <div class="field hidden" id="relayPanel">
+          <div class="field-label">Relay URL <span class="req">*</span>
+            <span class="field-hint">this page has no server of its own</span>
+          </div>
+          <input type="url" id="relayUrl" spellcheck="false" placeholder="https://rss-relay.YOUR-SUBDOMAIN.workers.dev">
+          <p class="field-note" id="relayNote">
+            Feeds send no CORS headers, so a browser cannot read them directly. Paste the URL of your
+            own <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">relay Worker</a>.
+            Until then, run the tool locally with <code class="inl">node src/cli.js</code>.
+          </p>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><label for="feedUrls" style="font:inherit;color:inherit;font-weight:600">Feed URLs</label> <span class="req">*</span>
+            <span class="field-hint">one per line</span>
+          </div>
+          <textarea id="feedUrls" spellcheck="false" placeholder="https://feeds.bbci.co.uk/news/rss.xml&#10;https://news.ycombinator.com/rss"></textarea>
+          <div class="url-count">
+            <span id="urlCount">0 feeds</span>
+            <span class="bad" id="urlInvalid"></span>
+            <span class="spacer"></span>
+            <select id="preset" aria-label="Load a sample feed list" style="width:auto;font-size:11.5px;padding:2px 6px">
+              <option value="">load sample…</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="field">
+          <div class="field-label">Max items per feed <span class="field-hint">1–500</span></div>
+          <input type="number" id="maxItemsPerFeed" min="1" max="500" step="1" value="50">
+        </label>
+
+        <div class="field">
+          <div class="field-label">Options</div>
+          <label class="switch" style="margin-bottom:10px">
+            <input type="checkbox" id="includeContent" checked>
+            <span class="track"></span>
+            <span class="switch-text">Include full content</span>
+          </label>
+          <label class="switch" style="margin-bottom:10px">
+            <input type="checkbox" id="removeDuplicates">
+            <span class="track"></span>
+            <span class="switch-text">Remove duplicate items</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="showImages" checked>
+            <span class="track"></span>
+            <span class="switch-text">Show thumbnails</span>
+          </label>
+        </div>
+
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <div class="grid-2" style="margin-bottom:12px">
+            <label class="field" style="margin:0">
+              <div class="field-label">Concurrency</div>
+              <input type="number" id="concurrency" min="1" max="20" step="1" value="5">
+            </label>
+            <label class="field" style="margin:0">
+              <div class="field-label">Timeout (ms)</div>
+              <input type="number" id="timeoutMs" min="1000" max="120000" step="500" value="20000">
+            </label>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="allowPrivate">
+            <span class="track"></span>
+            <span class="switch-text">Allow private / loopback feed URLs</span>
+          </label>
+          <p class="note">Off by default so this tool cannot be pointed at your LAN or cloud metadata
+            endpoints. Enable it only for feeds you host locally.</p>
+        </details>
+
+        <div style="margin-top:18px; display:flex; gap:8px">
+          <button class="btn-primary" id="start" style="flex:1">Start</button>
+          <button class="btn-danger-ghost" id="stop" style="display:none">Stop</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn-ghost btn-sm" id="clearForm">Clear</button>
+          <span class="field-hint" id="elapsed"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Export</h2></div>
+      <div class="card-body" style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn-ghost btn-sm" data-export="json" disabled>JSON</button>
+        <button class="btn-ghost btn-sm" data-export="csv" disabled>CSV</button>
+        <button class="btn-ghost btn-sm" data-export="md" disabled>Markdown</button>
+        <button class="btn-ghost btn-sm" data-export="ndjson" disabled>NDJSON</button>
+        <button class="btn-ghost btn-sm" data-export="copy" disabled>Copy JSON</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- --------------------------------------------------------- results pane -->
+  <div>
+    <section class="card">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-tab="items" aria-selected="true">Items<span class="count" id="c-items"></span></button>
+        <button class="tab" role="tab" data-tab="errors" aria-selected="false">Errors<span class="count" id="c-errors"></span></button>
+        <button class="tab" role="tab" data-tab="feeds" aria-selected="false">Feeds<span class="count" id="c-feeds"></span></button>
+        <button class="tab" role="tab" data-tab="raw" aria-selected="false">Raw JSON</button>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Filter by title, feed, author…" disabled>
+        <select id="feedFilter" disabled><option value="">All feeds</option></select>
+        <select id="sortBy" disabled>
+          <option value="default">Feed order</option>
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="title">Title A–Z</option>
+        </select>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="busy-bar hidden" id="busy"><i></i></div>
+
+      <div class="results" id="results">
+        <div class="empty" id="emptyState">
+          <h3>No run yet</h3>
+          <p>Paste one or more RSS / Atom / JSON Feed URLs on the left and press
+            <strong>Start</strong>. Results appear here, ready to export.</p>
+          <p class="note">Everything is parsed locally by <code>src/feed.js</code> — nothing is uploaded
+            to a third party beyond the plain request to each feed itself.</p>
+          <div class="samples" id="samples"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+const PRESETS = {
+  'News (RSS 2.0)': [
+    'https://feeds.bbci.co.uk/news/rss.xml',
+    'https://news.ycombinator.com/rss',
+    'https://hnrss.org/frontpage',
+  ],
+  'Blogs (Atom)': [
+    'https://www.theverge.com/rss/index.xml',
+    'https://xkcd.com/atom.xml',
+    'https://github.com/atom/atom/releases.atom',
+  ],
+  'Podcasts (audio)': [
+    'https://feeds.megaphone.fm/vergecast',
+    'https://www.npr.org/rss/podcast.php?id=510289',
+  ],
+  'YouTube channel': [
+    'https://www.youtube.com/feeds/videos.xml?channel_id=UC2eYFnH61tmytImy1mTYvhA',
+  ],
+};
+
+const state = {
+  payload: null,
+  tab: 'items',
+  busy: false,
+  abort: null,
+  timer: null,
+};
+
+let EMPTY_STATE = null;
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+/* ------------------------------------------------------------------ form */
+
+const FORM_FIELDS = ['feedUrls', 'maxItemsPerFeed', 'includeContent', 'removeDuplicates',
+  'showImages', 'concurrency', 'timeoutMs', 'allowPrivate', 'relayUrl'];
+
+function saveForm() {
+  const data = {};
+  for (const key of FORM_FIELDS) {
+    const node = $(key);
+    data[key] = node.type === 'checkbox' ? node.checked : node.value;
+  }
+  try { localStorage.setItem('rfe.form', JSON.stringify(data)); } catch { /* quota */ }
+}
+
+function restoreForm() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem('rfe.form') ?? '{}'); } catch { return; }
+  for (const key of FORM_FIELDS) {
+    if (!(key in data)) continue;
+    const node = $(key);
+    if (node.type === 'checkbox') node.checked = Boolean(data[key]);
+    else node.value = data[key];
+  }
+}
+
+function parseUrls(text) {
+  const lines = text.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+  const valid = [];
+  let invalid = 0;
+  for (const line of lines) {
+    try {
+      const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(line) ? line : `https://${line}`);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+      const href = url.href;
+      if (!valid.includes(href)) valid.push(href);
+    } catch {
+      invalid += 1;
+    }
+  }
+  return { valid, invalid, raw: lines.length };
+}
+
+function refreshUrlCount() {
+  const { valid, invalid, raw } = parseUrls($('feedUrls').value);
+  $('urlCount').textContent = `${valid.length} feed${valid.length === 1 ? '' : 's'}`;
+  $('urlInvalid').textContent = invalid ? `${invalid} unparseable` : '';
+  $('start').disabled = state.busy || valid.length === 0;
+}
+
+/* --------------------------------------------------------------- running */
+
+function setBusy(busy) {
+  state.busy = busy;
+  $('busy').classList.toggle('hidden', !busy);
+  $('start').style.display = busy ? 'none' : '';
+  $('stop').style.display = busy ? '' : 'none';
+  $('status-pill').textContent = busy ? 'running' : 'ready';
+  $('status-pill').className = busy ? 'pill' : 'pill ok';
+  $('search').disabled = busy || !state.payload;
+  for (const id of ['feedFilter', 'sortBy']) $(id).disabled = busy || !state.payload?.items?.length;
+  document.querySelectorAll('[data-export]').forEach((b) => {
+    b.disabled = busy || !state.payload?.items?.length;
+  });
+  refreshUrlCount();
+}
+
+/* ------------------------------------------------------- execution modes */
+
+/**
+ * server — the Node process serving this page also fetches the feeds.
+ * relay  — hosted on GitHub Pages, which has no server: each feed is pulled
+ *          through the user's own CORS relay and parsed in this tab, by the
+ *          same feed.js the CLI uses.
+ */
+const runtime = { mode: 'server', parser: null };
+
+async function detectMode() {
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    if (!res.ok) return 'relay';
+    const info = await res.json().catch(() => null);
+    return info?.tool === 'rss-feed-extractor' ? 'server' : 'relay';
+  } catch {
+    return 'relay';
+  }
+}
+
+function applyMode() {
+  const relay = runtime.mode === 'relay';
+  $('relayPanel').classList.toggle('hidden', !relay);
+  // The relay enforces its own private-host block, so this toggle would lie.
+  $('allowPrivate').disabled = relay;
+  if (relay) $('allowPrivate').checked = false;
+  $('status-pill').textContent = relay ? 'hosted · relay needed' : 'ready';
+  $('status-pill').className = relay && !relayBase() ? 'pill warn' : 'pill ok';
+}
+
+/** Normalised origin+path of the configured relay, or null when unusable. */
+function relayBase() {
+  const raw = ($('relayUrl')?.value ?? '').trim();
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) return null;
+  url.search = '';
+  url.hash = '';
+  return url;
+}
+
+async function loadParser() {
+  if (!runtime.parser) runtime.parser = await import('./lib/feed.js');
+  return runtime.parser;
+}
+
+/** Mirrors detectEncoding() in src/fetcher.js with browser-available decoders. */
+function decodeFeed(buffer, contentType) {
+  const label = (contentType?.match(/charset\s*=\s*"?([\w-]+)"?/i)?.[1]
+    ?? new TextDecoder('windows-1252').decode(buffer.subarray(0, 512)).match(/encoding\s*=\s*["']?([\w-]+)/i)?.[1]
+    ?? 'utf-8').toLowerCase();
+  // WHATWG encoding spec: these labels really mean windows-1252.
+  const normalized = ['iso-8859-1', 'iso8859-1', 'latin-1', 'latin1', 'us-ascii', 'ascii'].includes(label)
+    ? 'windows-1252' : label;
+  try {
+    return new TextDecoder(normalized).decode(buffer);
+  } catch {
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
+}
+
+/** Browser twin of fetchFeed(), routed through the relay. */
+async function fetchViaRelay(target, { timeoutMs, signal }) {
+  const base = relayBase();
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('timeout')), timeoutMs);
+  const onAbort = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', onAbort);
+  try {
+    base.searchParams.set('url', target);
+    const res = await fetch(base.toString(), {
+      signal: controller.signal, mode: 'cors', credentials: 'omit', redirect: 'follow',
+    });
+    if (!res.ok) {
+      const info = await res.json().catch(() => ({}));
+      throw new Error(info.error ?? `Relay returned HTTP ${res.status}`);
+    }
+    const buffer = new Uint8Array(await res.arrayBuffer());
+    if (!buffer.byteLength) throw new Error('Feed is empty');
+    return {
+      text: decodeFeed(buffer, res.headers.get('content-type')),
+      url: res.headers.get('x-relay-final-url') || target,
+      bytes: buffer.byteLength,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error(controller.signal.aborted && signal?.aborted ? 'Cancelled' : `Timed out after ${timeoutMs} ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Client-side twin of extractFeeds(); returns the identical payload shape. */
+async function extractViaRelay(body) {
+  if (!relayBase()) {
+    throw new Error('No relay URL set. Deploy worker/relay.js, paste its URL above, or run this tool locally.');
+  }
+  const { parseFeed, LIMITS } = await loadParser();
+  if (body.feedUrls.length > LIMITS.maxFeeds) {
+    throw new Error(`Too many feeds: ${body.feedUrls.length} given, ${LIMITS.maxFeeds} is the ceiling`);
+  }
+
+  const startedAt = Date.now();
+  const slots = new Array(body.feedUrls.length);
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < body.feedUrls.length) {
+      const index = cursor++;
+      const url = body.feedUrls[index];
+      const record = { feedUrl: url, ok: false, items: 0, bytes: 0, elapsedMs: 0 };
+      try {
+        const fetched = await fetchViaRelay(url, { timeoutMs: body.timeoutMs, signal: state.abort?.signal });
+        const parsed = parseFeed(fetched.text, fetched.url, {
+          maxItemsPerFeed: body.maxItemsPerFeed,
+          includeContent: body.includeContent,
+          removeDuplicates: body.removeDuplicates,
+        });
+        record.ok = true;
+        record.items = parsed.items.length;
+        record.bytes = fetched.bytes;
+        record.elapsedMs = fetched.elapsedMs;
+        record.feed = parsed.feed;
+        record.warnings = parsed.warnings;
+        slots[index] = { record, items: parsed.items };
+      } catch (err) {
+        record.error = err?.message ?? String(err);
+        record.code = err?.code ?? 'relay_error';
+        record.status = err?.status ?? null;
+        slots[index] = { record, items: [] };
+      }
+    }
+  };
+
+  // Indexed slots keep output in input order even though fetches race.
+  await Promise.all(Array.from({ length: Math.min(body.concurrency, body.feedUrls.length) }, worker));
+
+  const feeds = [];
+  const errors = [];
+  let items = [];
+  let totalBytes = 0;
+  for (const slot of slots) {
+    feeds.push(slot.record);
+    totalBytes += slot.record.bytes || 0;
+    items = items.concat(slot.items);
+    if (!slot.record.ok) {
+      errors.push({
+        type: 'error',
+        feedUrl: slot.record.feedUrl,
+        error: slot.record.error,
+        code: slot.record.code,
+        status: slot.record.status,
+      });
+    }
+  }
+
+  items.forEach((item, i) => { item.index = i + 1; });
+  const succeeded = feeds.filter((f) => f.ok).length;
+
+  return {
+    items,
+    errors,
+    feeds,
+    stats: {
+      requested: body.feedUrls.length,
+      succeeded,
+      failed: body.feedUrls.length - succeeded,
+      totalItems: items.length,
+      totalBytes,
+      durationMs: Date.now() - startedAt,
+    },
+    options: { ...body },
+  };
+}
+
+async function extractViaServer(body) {
+  const res = await fetch('/api/extract', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-rss-extractor': '1' },
+    body: JSON.stringify(body),
+    signal: state.abort.signal,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `Request failed (HTTP ${res.status})`);
+  return json;
+}
+
+async function run() {
+  const { valid } = parseUrls($('feedUrls').value);
+  if (!valid.length || state.busy) return;
+  saveForm();
+
+  const body = {
+    feedUrls: valid,
+    maxItemsPerFeed: Number($('maxItemsPerFeed').value) || 50,
+    includeContent: $('includeContent').checked,
+    removeDuplicates: $('removeDuplicates').checked,
+    concurrency: Number($('concurrency').value) || 5,
+    timeoutMs: Number($('timeoutMs').value) || 20000,
+    allowPrivate: $('allowPrivate').checked,
+  };
+
+  state.abort = new AbortController();
+  setBusy(true);
+  const startedAt = Date.now();
+  state.timer = setInterval(() => {
+    $('elapsed').textContent = `${((Date.now() - startedAt) / 1000).toFixed(1)}s elapsed`;
+  }, 100);
+
+  try {
+    const json = runtime.mode === 'server' ? await extractViaServer(body) : await extractViaRelay(body);
+    state.payload = json;
+    $('elapsed').textContent = `done in ${(json.stats?.durationMs ?? (Date.now() - startedAt)) / 1000 | 0}s · ${json.items.length} items`;
+    renderAll();
+    if (!json.items.length && json.errors.length) toast(`${json.errors.length} feed${json.errors.length === 1 ? '' : 's'} failed`);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      $('elapsed').textContent = 'cancelled';
+    } else {
+      $('elapsed').textContent = '';
+      toast(err.message);
+      if (!state.payload) showErrorState(err.message);
+    }
+  } finally {
+    clearInterval(state.timer);
+    state.abort = null;
+    setBusy(false);
+  }
+}
+
+function showErrorState(message) {
+  const box = $('results');
+  box.replaceChildren();
+  const wrap = el('div', 'empty');
+  wrap.append(el('h3', null, 'Run failed'));
+  wrap.append(el('p', null, message));
+  box.append(wrap);
+}
+
+/* --------------------------------------------------------------- rendering */
+
+function visibleItems() {
+  const items = state.payload?.items ?? [];
+  const query = $('search').value.trim().toLowerCase();
+  const feed = $('feedFilter').value;
+  const sort = $('sortBy').value;
+
+  let out = items.filter((item) => {
+    if (feed && (item.feedTitle || item.feedUrl) !== feed) return false;
+    if (!query) return true;
+    return [item.title, item.feedTitle, item.author, item.summary, item.categories?.join(' ')]
+      .some((field) => String(field ?? '').toLowerCase().includes(query));
+  });
+
+  if (sort === 'date-desc' || sort === 'date-asc') {
+    const dir = sort === 'date-desc' ? -1 : 1;
+    out = [...out].sort((a, b) => {
+      const av = a.pubDate ? Date.parse(a.pubDate) : 0;
+      const bv = b.pubDate ? Date.parse(b.pubDate) : 0;
+      return (av - bv) * dir;
+    });
+  } else if (sort === 'title') {
+    out = [...out].sort((a, b) => String(a.title).localeCompare(String(b.title)));
+  }
+  return out;
+}
+
+function relTime(iso) {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  const diff = Date.now() - ms;
+  const mins = Math.round(diff / 60000);
+  if (Math.abs(mins) < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (Math.abs(hours) < 36) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (Math.abs(days) < 30) return `${days}d ago`;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function bytes(n) {
+  if (!n) return '0 B';
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1048576).toFixed(2)} MB`;
+}
+
+function renderItem(item) {
+  const row = el('div', 'item');
+
+  if ($('showImages').checked && item.image) {
+    const img = el('img', 'thumb');
+    img.src = item.image;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => img.remove());
+    row.append(img);
+  }
+
+  const main = el('div', 'item-main');
+  const heading = el('h3', 'item-title');
+  if (item.link) {
+    const a = el('a', null, item.title);
+    a.href = item.link;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer nofollow';
+    heading.append(a);
+  } else {
+    heading.append(el('span', null, item.title));
+  }
+  main.append(heading);
+
+  const meta = el('div', 'item-meta');
+  if (item.feedTitle) meta.append(el('span', 'feed-tag', item.feedTitle));
+  const when = relTime(item.pubDate);
+  if (when) meta.append(el('span', null, when));
+  if (item.author) meta.append(el('span', null, item.author));
+  if (item.link) {
+    try { meta.append(el('span', null, new URL(item.link).hostname.replace(/^www\./, ''))); } catch { /* ignore */ }
+  }
+  main.append(meta);
+
+  if (item.contentSnippet) main.append(el('p', 'item-snippet', item.contentSnippet));
+
+  if (item.categories?.length) {
+    const chips = el('div', 'chips');
+    for (const c of item.categories.slice(0, 8)) chips.append(el('span', 'chip', c));
+    main.append(chips);
+  }
+
+  const longText = item.contentText || item.summary;
+  if (longText && longText.length > (item.contentSnippet?.length ?? 0) + 40) {
+    const body = el('div', 'item-body hidden');
+    body.append(el('pre', null, longText));
+    const toggle = el('button', 'expand', 'Read full text');
+    toggle.type = 'button';
+    toggle.addEventListener('click', () => {
+      const hidden = body.classList.toggle('hidden');
+      toggle.textContent = hidden ? 'Read full text' : 'Collapse';
+    });
+    main.append(body, toggle);
+  }
+
+  row.append(main);
+  return row;
+}
+
+function renderIdle() {
+  if (EMPTY_STATE) $('results').replaceChildren(EMPTY_STATE);
+}
+
+function renderResults() {
+  const box = $('results');
+  box.replaceChildren();
+
+  if (!state.payload) { box.append(EMPTY_STATE); return; }
+  const { items = [], errors = [], feeds = [] } = state.payload;
+
+  if (state.tab === 'raw') {
+    box.append(el('pre', 'raw', JSON.stringify({ items, errors, feeds, stats: state.payload.stats }, null, 2)));
+    return;
+  }
+
+  if (state.tab === 'errors') {
+    if (!errors.length) {
+      const empty = el('div', 'empty');
+      empty.append(el('h3', null, 'No errors'));
+      empty.append(el('p', null, 'Every feed in the last run parsed successfully.'));
+      box.append(empty);
+      return;
+    }
+    for (const err of errors) {
+      const row = el('div', 'err-row');
+      row.append(el('span', 'err-badge', err.status ? `HTTP ${err.status}` : (err.code ?? 'error')));
+      const col = el('div');
+      col.append(el('div', 'err-url', err.feedUrl));
+      col.append(el('div', 'err-msg', err.error));
+      row.append(col);
+      box.append(row);
+    }
+    return;
+  }
+
+  if (state.tab === 'feeds') {
+    const table = el('table', 'feeds');
+    const head = el('tr');
+    for (const label of ['Feed', 'Status', 'Items', 'Size', 'Time']) head.append(el('th', null, label));
+    const thead = el('thead');
+    thead.append(head);
+    const tbody = el('tbody');
+    for (const f of feeds) {
+      const tr = el('tr');
+      const nameCell = el('td');
+      nameCell.append(el('div', null, f.feed?.title ?? '(no title)'));
+      const u = el('div', 'u', f.feedUrl);
+      nameCell.append(u);
+      tr.append(nameCell);
+      const status = el('td');
+      status.append(el('span', f.ok ? 'chip' : 'err-badge', f.ok ? (f.feed?.format ?? 'ok') : (f.code ?? 'failed')));
+      if (!f.ok) { const m = el('div', 'err-msg', f.error); status.append(m); }
+      tr.append(status);
+      tr.append(el('td', 'num', String(f.items ?? 0)));
+      tr.append(el('td', 'num', bytes(f.bytes)));
+      tr.append(el('td', 'num', f.elapsedMs ? `${f.elapsedMs} ms` : '—'));
+      tbody.append(tr);
+    }
+    table.append(thead, tbody);
+    box.append(table);
+    return;
+  }
+
+  const shown = visibleItems();
+  if (!shown.length) {
+    const empty = el('div', 'empty');
+    empty.append(el('h3', null, items.length ? 'Nothing matches' : 'No items extracted'));
+    empty.append(el('p', null, items.length
+      ? 'Loosen the filter or pick a different feed.'
+      : 'The feeds responded, but yielded zero items. Try raising “Max items per feed” or turning off “Remove duplicates”.'));
+    box.append(empty);
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const item of shown) frag.append(renderItem(item));
+  box.append(frag);
+}
+
+function renderStats() {
+  const wrap = $('stats');
+  wrap.replaceChildren();
+  const s = state.payload?.stats;
+  if (!s) return;
+  const add = (value, label) => {
+    const box = el('div', 'stat');
+    box.append(el('b', null, String(value)));
+    box.append(el('span', null, label));
+    wrap.append(box);
+  };
+  add(s.totalItems, 'items');
+  add(`${s.succeeded}/${s.requested}`, 'feeds ok');
+  if (s.failed) add(s.failed, 'failed');
+  add(bytes(s.totalBytes), 'downloaded');
+  add(`${(s.durationMs / 1000).toFixed(1)}s`, 'took');
+}
+
+function renderTabs() {
+  const p = state.payload;
+  $('c-items').textContent = p ? ` ${p.items.length}` : '';
+  $('c-errors').textContent = p?.errors.length ? ` ${p.errors.length}` : '';
+  $('c-feeds').textContent = p ? ` ${p.feeds.length}` : '';
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.setAttribute('aria-selected', String(t.dataset.tab === state.tab));
+  });
+}
+
+function renderFeedFilter() {
+  const select = $('feedFilter');
+  const current = select.value;
+  select.replaceChildren();
+  const all = el('option', null, 'All feeds');
+  all.value = '';
+  select.append(all);
+  const names = [...new Set((state.payload?.items ?? []).map((i) => i.feedTitle || i.feedUrl))];
+  for (const name of names) {
+    const opt = el('option', null, `${name} (${(state.payload.items ?? []).filter((i) => (i.feedTitle || i.feedUrl) === name).length})`);
+    opt.value = name;
+    select.append(opt);
+  }
+  select.value = [...select.options].some((o) => o.value === current) ? current : '';
+}
+
+function renderAll() {
+  renderTabs();
+  renderStats();
+  renderFeedFilter();
+  renderResults();
+  setBusy(state.busy);
+}
+
+/* ---------------------------------------------------------------- export */
+
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = el('a');
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function csvCell(value) {
+  if (value === null || value === undefined) return '';
+  const text = Array.isArray(value) ? value.join('|') : String(value);
+  const safe = /^[=+\-@\t]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function toCsv(items) {
+  const cols = ['feedTitle', 'feedUrl', 'title', 'link', 'author', 'pubDate', 'categories', 'summary', 'contentSnippet', 'image', 'id'];
+  const lines = [cols.map(csvCell).join(',')];
+  for (const item of items) lines.push(cols.map((c) => csvCell(item[c])).join(','));
+  return `\uFEFF${lines.join('\r\n')}`;
+}
+
+function toMarkdown(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = item.feedTitle || item.feedUrl || 'Feed';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  const out = [];
+  for (const [feed, list] of groups) {
+    out.push(`## ${feed}`, '');
+    for (const item of list) {
+      const date = item.pubDate ? item.pubDate.slice(0, 10) : '';
+      out.push(`### ${item.link ? `[${item.title}](${item.link})` : item.title}${date ? ` — ${date}` : ''}`);
+      if (item.contentSnippet) out.push('', item.contentSnippet);
+      out.push('');
+    }
+  }
+  return out.join('\n');
+}
+
+async function exportAs(kind) {
+  const items = visibleItems();
+  if (!items.length) return;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  if (kind === 'copy') {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(items, null, 2));
+      toast(`Copied ${items.length} items`);
+    } catch {
+      toast('Clipboard blocked — use “JSON” instead');
+    }
+    return;
+  }
+  if (kind === 'csv') return download(`rss-${stamp}.csv`, toCsv(items), 'text/csv;charset=utf-8');
+  if (kind === 'md') return download(`rss-${stamp}.md`, toMarkdown(items), 'text/markdown;charset=utf-8');
+  if (kind === 'ndjson') return download(`rss-${stamp}.ndjson`, items.map((i) => JSON.stringify(i)).join('\n'), 'application/x-ndjson');
+  return download(`rss-${stamp}.json`, JSON.stringify({ items, stats: state.payload.stats }, null, 2), 'application/json');
+}
+
+/* ----------------------------------------------------------------- toast */
+
+let toastTimer;
+function toast(message) {
+  const node = $('toast');
+  node.textContent = message;
+  node.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove('show'), 3200);
+}
+
+/* ---------------------------------------------------------------- wiring */
+
+function boot() {
+  $('endpoint').textContent = location.host;
+  EMPTY_STATE = $('emptyState');
+  restoreForm();
+
+  for (const [name, urls] of Object.entries(PRESETS)) {
+    const opt = el('option', null, name);
+    opt.value = name;
+    $('preset').append(opt);
+  }
+  for (const name of Object.keys(PRESETS)) {
+    const btn = el('button', 'btn-ghost btn-sm', name);
+    btn.type = 'button';
+    btn.addEventListener('click', () => {
+      $('feedUrls').value = PRESETS[name].join('\n');
+      refreshUrlCount();
+      saveForm();
+    });
+    $('samples').append(btn);
+  }
+
+  $('preset').addEventListener('change', (event) => {
+    const name = event.target.value;
+    if (!name) return;
+    $('feedUrls').value = PRESETS[name].join('\n');
+    event.target.value = '';
+    refreshUrlCount();
+    saveForm();
+  });
+
+  $('feedUrls').addEventListener('input', () => { refreshUrlCount(); saveForm(); });
+  for (const id of FORM_FIELDS) {
+    $(id).addEventListener('change', saveForm);
+    if ($(id).type === 'number') $(id).addEventListener('input', saveForm);
+  }
+  $('showImages').addEventListener('change', renderResults);
+  $('start').addEventListener('click', run);
+  $('stop').addEventListener('click', () => state.abort?.abort());
+  $('clearForm').addEventListener('click', () => {
+    $('feedUrls').value = '';
+    state.payload = null;
+    $('elapsed').textContent = '';
+    refreshUrlCount();
+    renderAll();
+  });
+
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      state.tab = tab.dataset.tab;
+      renderTabs();
+      renderResults();
+    });
+  });
+  document.querySelectorAll('[data-export]').forEach((btn) => {
+    btn.addEventListener('click', () => exportAs(btn.dataset.export));
+  });
+
+  let searchTimer;
+  $('search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderResults, 120);
+  });
+  $('feedFilter').addEventListener('change', renderResults);
+  $('sortBy').addEventListener('change', renderResults);
+
+  document.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      run();
+    }
+  });
+
+  refreshUrlCount();
+  setBusy(false);
+}
+
+boot();
+
+// setBusy(false) above stamps the pill as "ready"; mode detection has to land
+// after it or the hosted build would claim to be ready without a relay.
+detectMode().then((mode) => {
+  runtime.mode = mode;
+  $('relayUrl').addEventListener('input', applyMode);
+  applyMode();
+});
+</script>
+</body>
+</html>

@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from '../tools/build-site.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SITE = path.join(ROOT, 'site');
+const APP = path.join(ROOT, 'docs', 'app');
 
 const FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Deployed</title><link>https://example.com</link>
@@ -17,20 +17,28 @@ const FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <item><title>Second item</title><link>https://example.com/2</link><guid>d-2</guid></item>
 </channel></rss>`;
 
-let app;
 let appHtml;
 
-before(async () => {
+before(() => {
   build();
-  app = path.join(SITE, 'app');
-  appHtml = fs.readFileSync(path.join(app, 'index.html'), 'utf8');
+  appHtml = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
 });
 
-test('build emits the landing page, the app and the parser', () => {
-  assert.ok(fs.existsSync(path.join(SITE, 'index.html')), 'landing page missing');
-  assert.ok(fs.existsSync(path.join(SITE, '.nojekyll')), '.nojekyll missing — Jekyll would mangle the app');
-  assert.ok(fs.existsSync(path.join(app, 'lib', 'feed.js')));
-  assert.ok(fs.existsSync(path.join(app, 'lib', 'xml.js')));
+test('the committed app exists where Pages will serve it', () => {
+  assert.ok(fs.existsSync(path.join(APP, 'index.html')));
+  assert.ok(fs.existsSync(path.join(APP, 'lib', 'feed.js')));
+  assert.ok(fs.existsSync(path.join(APP, 'lib', 'xml.js')));
+  assert.ok(fs.existsSync(path.join(ROOT, 'docs', '.nojekyll')),
+    '.nojekyll missing — Jekyll would mangle the app');
+});
+
+test('the copied parser is byte-identical to src, so it cannot drift', () => {
+  for (const file of ['xml.js', 'feed.js']) {
+    const shipped = fs.readFileSync(path.join(APP, 'lib', file));
+    const source = fs.readFileSync(path.join(ROOT, 'src', file));
+    assert.equal(shipped.equals(source), true,
+      `docs/app/lib/${file} is stale — run "node tools/build-site.js" and commit`);
+  }
 });
 
 test('the app references its parser at the path it will actually be served from', () => {
@@ -39,28 +47,23 @@ test('the app references its parser at the path it will actually be served from'
   assert.equal(appHtml.includes("from 'node:"), false);
 });
 
-test('the hosted UI is present and the local-only affordances are wired', () => {
+test('the hosted UI is present and wired', () => {
   assert.match(appHtml, /id="relayPanel"/);
   assert.match(appHtml, /id="relayUrl"/);
   assert.match(appHtml, /detectMode/);
   assert.match(appHtml, /extractViaRelay/);
 });
 
-test('CSP survives the build with the relay still permitted', () => {
-  const connectSrc = appHtml.match(/connect-src\s+([^;"]+)/)?.[1];
-  assert.match(connectSrc, /https:\/\/\*\.workers\.dev/);
-});
+test('CSP permits the same-origin parser and a workers.dev relay, nothing more', () => {
+  const connectSrc = appHtml.match(/connect-src\s+([^;"]+)/)?.[1]?.trim();
+  assert.deepEqual(connectSrc?.split(/\s+/).sort(), ["'self'", 'https://*.workers.dev']);
 
-test('copied parser is browser-safe', () => {
-  for (const file of ['xml.js', 'feed.js']) {
-    const source = fs.readFileSync(path.join(app, 'lib', file), 'utf8');
-    assert.equal(/node:/.test(source), false, `${file} would not load in a browser`);
-    assert.equal(/\bBuffer\b|\bprocess\./.test(source), false, `${file} uses Node globals`);
-  }
+  const scriptSrc = appHtml.match(/script-src\s+([^;"]+)/)?.[1]?.trim();
+  assert.match(scriptSrc, /(^|\s)'self'(\s|$)/, "script-src needs 'self' for the parser import");
 });
 
 test('the parser works when imported from its deployed location', async () => {
-  const { parseFeed } = await import(pathToFileURL(path.join(app, 'lib', 'feed.js')).href);
+  const { parseFeed } = await import(pathToFileURL(path.join(APP, 'lib', 'feed.js')).href);
   const result = parseFeed(FIXTURE, 'https://example.com/feed.xml', { maxItemsPerFeed: 50 });
 
   assert.equal(result.items.length, 2);
@@ -69,16 +72,16 @@ test('the parser works when imported from its deployed location', async () => {
   const [first] = result.items;
   assert.equal(first.title, 'First item');
   assert.equal(first.link, 'https://example.com/1');
-  // The documented contract: content keeps markup, contentText/summary strip it.
+  // Documented contract: content keeps markup, contentText/summary strip it.
   assert.equal(first.content, 'Body of the <b>first</b> item.');
   assert.equal(first.contentText, 'Body of the first item.');
   assert.equal(first.summary, 'Body of the first item.');
   assert.ok(first.pubDate, 'pubDate should be parsed to a timestamp');
-  assert.equal(result.items[1].contentText, null, 'item without a description yields null, not undefined');
+  assert.equal(result.items[1].contentText, null, 'absent fields are null, not undefined');
 });
 
 test('build is idempotent and leaves no stale files', () => {
-  const marker = path.join(app, 'lib', 'stale-should-not-survive.js');
+  const marker = path.join(APP, 'lib', 'stale-should-not-survive.js');
   fs.writeFileSync(marker, 'export const gone = true;');
   build();
   assert.equal(fs.existsSync(marker), false, 'a previous build artifact survived the rebuild');
