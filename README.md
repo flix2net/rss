@@ -18,16 +18,23 @@ On Windows you can just **double-click `start.bat`**.
 
 <!-- ![rss-feed-extractor GUI](docs/screenshot.png)  ← uncomment once docs/screenshot.png exists -->
 
-### No Node handy? Run it on GitHub
+### Use it from a browser
 
-The badge above opens a throwaway Codespace with the GUI already running: it checks out the repo,
-runs the 46 tests, starts the server on port 5055, and forwards it to your browser. Nothing is
-installed from npm — there is nothing to install. The forwarded port is **private**, so only your
-GitHub account can reach it.
+**<https://flix2net.github.io/rss/app/>** — the same GUI, served by GitHub Pages, opens on a phone or
+a library computer with nothing installed.
 
-This is a convenience trial, not a hosted service. The tool's actual point is that it runs on *your*
-machine, and a Codespace burns core-hours while it is idle — stop it when you are done
-(`gh codespace stop -a`, or the Codespaces tab).
+It needs one thing you must supply: a **relay**. No real feed sends `Access-Control-Allow-Origin`
+(checked against BBC, HN, The Verge, GitHub Atom and Google News), so a browser cannot read one
+directly and Pages runs no server. Deploy [`worker/relay.js`](worker/relay.js) to Cloudflare Workers —
+free tier, 100k requests/day, no card, paste-into-the-editor to deploy — then paste its URL into the
+Relay field. It is remembered in `localStorage`, so it is a one-time setup per browser.
+
+The relay only moves bytes; parsing still happens in your tab with the same `src/feed.js` the CLI
+uses. Your feed URLs go to a Worker you own, not to a third-party service.
+
+Still prefer a full local run? The Codespaces badge above starts the real server instead: it runs the
+67 tests, serves port 5055 and forwards it privately. Handy for a trial, but a Codespace burns
+core-hours while idle, so stop it when you are done (`gh codespace stop -a`).
 
 ---
 
@@ -172,7 +179,11 @@ src/
   cli.js      argument parsing, serve and extract modes
 public/
   index.html  the GUI (inline CSS + JS, no bundler, no CDN)
-test/         46 tests on node:test — parser, formats, fetcher, HTTP surface
+worker/
+  relay.js    optional Cloudflare Worker that adds CORS for the hosted build
+tools/
+  build-site.js  assembles the Pages artifact (landing + app + parser copy)
+test/         67 tests on node:test — parser, formats, fetcher, HTTP surface, relay, build
 ```
 
 ## Security
@@ -187,6 +198,10 @@ test/         46 tests on node:test — parser, formats, fetcher, HTTP surface
   Content-Security-Policy blocks remote scripts.
 - CSV export prefixes cells starting with `= + - @` so Excel will not evaluate them as formulas.
 - No telemetry, no update checks, no network calls except the feeds you name.
+- The hosted build's relay is opt-in and yours: `worker/relay.js` refuses non-http(s) schemes and
+  every loopback, RFC1918, CGNAT and link-local target, using the same rules as the local server
+  (asserted by a parity test, so the two cannot drift apart). It caps responses at 8 MB. Set
+  `ALLOWED_ORIGINS` in that file to lock it to your own page — an open relay is an SSRF door.
 
 ## Limits
 
@@ -196,7 +211,7 @@ test/         46 tests on node:test — parser, formats, fetcher, HTTP surface
 ## Development
 
 ```bash
-node --test        # 46 tests, no framework to install
+node --test        # 67 tests, no framework to install
 ```
 
 Tests cover the parser against hand-written malformed fixtures, plus a real HTTP round-trip against a

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.workers.dev; base-uri 'none'; form-action 'none'">
 <title>RSS Feed Extractor — local</title>
 <style>
   :root {
@@ -79,6 +79,7 @@
     background: var(--panel-2); font-size: 11.5px; color: var(--muted);
   }
   .pill.ok { color: var(--green); background: var(--green-soft); border-color: transparent; }
+  .pill.warn { color: var(--amber); border-color: var(--amber); }
 
   .layout {
     display: grid; grid-template-columns: 340px minmax(0, 1fr);
@@ -100,9 +101,11 @@
   label.field:last-child { margin-bottom: 0; }
   .field-label { display: flex; align-items: baseline; gap: 6px; font-weight: 600; font-size: 12.5px; margin-bottom: 6px; }
   .field-hint { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+  .field-note { margin: 7px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+  .field-note a { color: var(--accent); }
   .req { color: var(--red); }
 
-  textarea, input[type=text], input[type=number], select {
+  textarea, input[type=text], input[type=url], input[type=number], select {
     width: 100%; padding: 8px 10px; font: inherit; font-size: 13px;
     color: var(--text); background: var(--panel);
     border: 1px solid var(--border-strong); border-radius: 8px; outline: none;
@@ -283,6 +286,18 @@
       <div class="card-head"><h2>Input configuration</h2></div>
       <div class="card-body">
 
+        <div class="field hidden" id="relayPanel">
+          <div class="field-label">Relay URL <span class="req">*</span>
+            <span class="field-hint">this page has no server of its own</span>
+          </div>
+          <input type="url" id="relayUrl" spellcheck="false" placeholder="https://rss-relay.YOUR-SUBDOMAIN.workers.dev">
+          <p class="field-note" id="relayNote">
+            Feeds send no CORS headers, so a browser cannot read them directly. Paste the URL of your
+            own <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">relay Worker</a>.
+            Until then, run the tool locally with <code class="inl">node src/cli.js</code>.
+          </p>
+        </div>
+
         <div class="field">
           <div class="field-label"><label for="feedUrls" style="font:inherit;color:inherit;font-weight:600">Feed URLs</label> <span class="req">*</span>
             <span class="field-hint">one per line</span>
@@ -449,7 +464,7 @@ const el = (tag, cls, text) => {
 /* ------------------------------------------------------------------ form */
 
 const FORM_FIELDS = ['feedUrls', 'maxItemsPerFeed', 'includeContent', 'removeDuplicates',
-  'showImages', 'concurrency', 'timeoutMs', 'allowPrivate'];
+  'showImages', 'concurrency', 'timeoutMs', 'allowPrivate', 'relayUrl'];
 
 function saveForm() {
   const data = {};
@@ -512,6 +527,204 @@ function setBusy(busy) {
   refreshUrlCount();
 }
 
+/* ------------------------------------------------------- execution modes */
+
+/**
+ * server — the Node process serving this page also fetches the feeds.
+ * relay  — hosted on GitHub Pages, which has no server: each feed is pulled
+ *          through the user's own CORS relay and parsed in this tab, by the
+ *          same feed.js the CLI uses.
+ */
+const runtime = { mode: 'server', parser: null };
+
+async function detectMode() {
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    if (!res.ok) return 'relay';
+    const info = await res.json().catch(() => null);
+    return info?.tool === 'rss-feed-extractor' ? 'server' : 'relay';
+  } catch {
+    return 'relay';
+  }
+}
+
+function applyMode() {
+  const relay = runtime.mode === 'relay';
+  $('relayPanel').classList.toggle('hidden', !relay);
+  // The relay enforces its own private-host block, so this toggle would lie.
+  $('allowPrivate').disabled = relay;
+  if (relay) $('allowPrivate').checked = false;
+  $('status-pill').textContent = relay ? 'hosted · relay needed' : 'ready';
+  $('status-pill').className = relay && !relayBase() ? 'pill warn' : 'pill ok';
+}
+
+/** Normalised origin+path of the configured relay, or null when unusable. */
+function relayBase() {
+  const raw = ($('relayUrl')?.value ?? '').trim();
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) return null;
+  url.search = '';
+  url.hash = '';
+  return url;
+}
+
+async function loadParser() {
+  if (!runtime.parser) runtime.parser = await import('./lib/feed.js');
+  return runtime.parser;
+}
+
+/** Mirrors detectEncoding() in src/fetcher.js with browser-available decoders. */
+function decodeFeed(buffer, contentType) {
+  const label = (contentType?.match(/charset\s*=\s*"?([\w-]+)"?/i)?.[1]
+    ?? new TextDecoder('windows-1252').decode(buffer.subarray(0, 512)).match(/encoding\s*=\s*["']?([\w-]+)/i)?.[1]
+    ?? 'utf-8').toLowerCase();
+  // WHATWG encoding spec: these labels really mean windows-1252.
+  const normalized = ['iso-8859-1', 'iso8859-1', 'latin-1', 'latin1', 'us-ascii', 'ascii'].includes(label)
+    ? 'windows-1252' : label;
+  try {
+    return new TextDecoder(normalized).decode(buffer);
+  } catch {
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
+}
+
+/** Browser twin of fetchFeed(), routed through the relay. */
+async function fetchViaRelay(target, { timeoutMs, signal }) {
+  const base = relayBase();
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('timeout')), timeoutMs);
+  const onAbort = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', onAbort);
+  try {
+    base.searchParams.set('url', target);
+    const res = await fetch(base.toString(), {
+      signal: controller.signal, mode: 'cors', credentials: 'omit', redirect: 'follow',
+    });
+    if (!res.ok) {
+      const info = await res.json().catch(() => ({}));
+      throw new Error(info.error ?? `Relay returned HTTP ${res.status}`);
+    }
+    const buffer = new Uint8Array(await res.arrayBuffer());
+    if (!buffer.byteLength) throw new Error('Feed is empty');
+    return {
+      text: decodeFeed(buffer, res.headers.get('content-type')),
+      url: res.headers.get('x-relay-final-url') || target,
+      bytes: buffer.byteLength,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error(controller.signal.aborted && signal?.aborted ? 'Cancelled' : `Timed out after ${timeoutMs} ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Client-side twin of extractFeeds(); returns the identical payload shape. */
+async function extractViaRelay(body) {
+  if (!relayBase()) {
+    throw new Error('No relay URL set. Deploy worker/relay.js, paste its URL above, or run this tool locally.');
+  }
+  const { parseFeed, LIMITS } = await loadParser();
+  if (body.feedUrls.length > LIMITS.maxFeeds) {
+    throw new Error(`Too many feeds: ${body.feedUrls.length} given, ${LIMITS.maxFeeds} is the ceiling`);
+  }
+
+  const startedAt = Date.now();
+  const slots = new Array(body.feedUrls.length);
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < body.feedUrls.length) {
+      const index = cursor++;
+      const url = body.feedUrls[index];
+      const record = { feedUrl: url, ok: false, items: 0, bytes: 0, elapsedMs: 0 };
+      try {
+        const fetched = await fetchViaRelay(url, { timeoutMs: body.timeoutMs, signal: state.abort?.signal });
+        const parsed = parseFeed(fetched.text, fetched.url, {
+          maxItemsPerFeed: body.maxItemsPerFeed,
+          includeContent: body.includeContent,
+          removeDuplicates: body.removeDuplicates,
+        });
+        record.ok = true;
+        record.items = parsed.items.length;
+        record.bytes = fetched.bytes;
+        record.elapsedMs = fetched.elapsedMs;
+        record.feed = parsed.feed;
+        record.warnings = parsed.warnings;
+        slots[index] = { record, items: parsed.items };
+      } catch (err) {
+        record.error = err?.message ?? String(err);
+        record.code = err?.code ?? 'relay_error';
+        record.status = err?.status ?? null;
+        slots[index] = { record, items: [] };
+      }
+    }
+  };
+
+  // Indexed slots keep output in input order even though fetches race.
+  await Promise.all(Array.from({ length: Math.min(body.concurrency, body.feedUrls.length) }, worker));
+
+  const feeds = [];
+  const errors = [];
+  let items = [];
+  let totalBytes = 0;
+  for (const slot of slots) {
+    feeds.push(slot.record);
+    totalBytes += slot.record.bytes || 0;
+    items = items.concat(slot.items);
+    if (!slot.record.ok) {
+      errors.push({
+        type: 'error',
+        feedUrl: slot.record.feedUrl,
+        error: slot.record.error,
+        code: slot.record.code,
+        status: slot.record.status,
+      });
+    }
+  }
+
+  items.forEach((item, i) => { item.index = i + 1; });
+  const succeeded = feeds.filter((f) => f.ok).length;
+
+  return {
+    items,
+    errors,
+    feeds,
+    stats: {
+      requested: body.feedUrls.length,
+      succeeded,
+      failed: body.feedUrls.length - succeeded,
+      totalItems: items.length,
+      totalBytes,
+      durationMs: Date.now() - startedAt,
+    },
+    options: { ...body },
+  };
+}
+
+async function extractViaServer(body) {
+  const res = await fetch('/api/extract', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-rss-extractor': '1' },
+    body: JSON.stringify(body),
+    signal: state.abort.signal,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `Request failed (HTTP ${res.status})`);
+  return json;
+}
+
 async function run() {
   const { valid } = parseUrls($('feedUrls').value);
   if (!valid.length || state.busy) return;
@@ -535,14 +748,7 @@ async function run() {
   }, 100);
 
   try {
-    const res = await fetch('/api/extract', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-rss-extractor': '1' },
-      body: JSON.stringify(body),
-      signal: state.abort.signal,
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error ?? `Request failed (HTTP ${res.status})`);
+    const json = runtime.mode === 'server' ? await extractViaServer(body) : await extractViaRelay(body);
     state.payload = json;
     $('elapsed').textContent = `done in ${(json.stats?.durationMs ?? (Date.now() - startedAt)) / 1000 | 0}s · ${json.items.length} items`;
     renderAll();
@@ -969,6 +1175,14 @@ function boot() {
 }
 
 boot();
+
+// setBusy(false) above stamps the pill as "ready"; mode detection has to land
+// after it or the hosted build would claim to be ready without a relay.
+detectMode().then((mode) => {
+  runtime.mode = mode;
+  $('relayUrl').addEventListener('input', applyMode);
+  applyMode();
+});
 </script>
 </body>
 </html>

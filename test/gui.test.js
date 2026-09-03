@@ -39,6 +39,29 @@ test('feed content is never injected as HTML', () => {
 });
 
 test('no remote scripts, fonts or CDNs are referenced', () => {
-  const external = [...html.matchAll(/(?:src|href)\s*=\s*"(https?:)?\/\/[^"]+"/gi)].map((m) => m[0]);
-  assert.deepEqual(external, [], `GUI must stay offline-capable: ${external.join(', ')}`);
+  // The invariant is "nothing the browser auto-fetches", which is narrower than
+  // "no absolute URLs": an <a href> to the source repo is never requested, so it
+  // does not cost offline-capability. Subresources do.
+  const subresources = [
+    ...html.matchAll(/\bsrc\s*=\s*"(?:https?:)?\/\/[^"]*"/gi),
+    ...html.matchAll(/<link[^>]+href\s*=\s*"(?:https?:)?\/\/[^"]*"/gi),
+    ...html.matchAll(/@import\s+["']?(?:https?:)?\/\//gi),
+    ...html.matchAll(/url\(\s*["']?(?:https?:)?\/\//gi),
+  ].map((m) => m[0]);
+  assert.deepEqual(subresources, [], `GUI must stay offline-capable: ${subresources.join(', ')}`);
+
+  // Guard the two ways code could reach the network from a script tag.
+  assert.equal(/import\(\s*["']https?:/.test(html), false, 'remote dynamic import found');
+  assert.equal(/<script[^>]+\bsrc\s*=/.test(html), false, 'external script tag found');
+});
+
+test('CSP allows same-origin plus a workers.dev relay, and nothing else', () => {
+  const connectSrc = html.match(/connect-src\s+([^;"]+)/)?.[1]?.trim();
+  assert.ok(connectSrc, 'connect-src must be declared');
+  assert.deepEqual(connectSrc.split(/\s+/).sort(), ["'self'", 'https://*.workers.dev']);
+
+  // The hosted build loads the parser via a same-origin dynamic import, which
+  // needs 'self' in script-src; dropping it would break the Pages deployment.
+  const scriptSrc = html.match(/script-src\s+([^;"]+)/)?.[1]?.trim();
+  assert.match(scriptSrc, /(^|\s)'self'(\s|$)/, "script-src must include 'self'");
 });

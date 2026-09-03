@@ -151,8 +151,8 @@
   <h1>Paste feed URLs.<br>Get clean structured items back.</h1>
   <p class="lede">A <strong>free, local, zero-dependency</strong> RSS / Atom / JSON Feed extractor with a web GUI. It does the job of hosted feed-scraping actors — without an account, an API key, a run quota, or your URL list being sent through anyone else's servers.</p>
   <div class="cta">
-    <a class="btn primary" href="https://github.com/flix2net/rss/archive/refs/heads/main.zip">Download .zip</a>
-    <a class="btn" href="https://codespaces.new/flix2net/rss?quickstart=1">Try it hosted &rarr;</a>
+    <a class="btn primary" href="./app/">Open the web app</a>
+    <a class="btn" href="https://github.com/flix2net/rss/archive/refs/heads/main.zip">Download .zip</a>
     <a class="btn" href="https://github.com/flix2net/rss">View on GitHub</a>
     <a class="btn" href="#install">Quick start</a>
   </div>
@@ -161,7 +161,7 @@
     <span class="fact">0 dependencies</span>
     <span class="fact">no npm install</span>
     <span class="fact">~100 KB</span>
-    <span class="fact">46 tests</span>
+    <span class="fact">67 tests</span>
     <span class="fact">MIT licensed</span>
   </div>
 </div>
@@ -176,7 +176,7 @@ git clone https://github.com/flix2net/rss.git
 node src/cli.js        <span class="c"># opens http://127.0.0.1:5055</span></pre>
     <p>On Windows, after cloning, just <strong>double-click <code class="inl">start.bat</code></strong>.</p>
     <div class="callout">
-      <p><strong>This page is documentation only.</strong> The GUI needs the Node server that ships in this repo &mdash; GitHub Pages serves static files and cannot run it, and a browser cannot fetch feeds directly because RSS endpoints send no CORS headers. Run <code class="inl">node src/cli.js</code> locally and the interface opens in about a second. No Node on that machine? <a href="https://codespaces.new/flix2net/rss?quickstart=1">Open a Codespace</a> and the server starts itself, on a private forwarded port.</p>
+      <p><strong>This page is documentation only.</strong> The GUI needs somewhere to run the fetch, and GitHub Pages serves static files. It is not a missing feature: no real feed sends <code class="inl">Access-Control-Allow-Origin</code>, so a browser cannot read one directly either. Two ways to use the interface: <a href="./app/"><strong>open the hosted app</strong></a> and point it at <a href="https://github.com/flix2net/rss/blob/main/worker/relay.js" target="_blank" rel="noreferrer">your own free relay Worker</a> (about 15 lines, deployed by pasting into the Cloudflare editor), or run <code class="inl">node src/cli.js</code> locally, where the server does the fetching itself and nothing leaves your machine.</p>
     </div>
   </div>
 </section>
@@ -282,7 +282,7 @@ node src/cli.js extract a.xml b.xml c.xml --no-content --errors</pre>
 <section>
   <div class="wrap">
     <h2>Development</h2>
-<pre>node --test        <span class="c"># 46 tests, no framework to install</span></pre>
+<pre>node --test        <span class="c"># 67 tests, no framework to install</span></pre>
     <p>Tests cover the parser against hand-written malformed fixtures, plus a real HTTP round-trip against a local fixture server (charset decoding, gzip, 404s, timeouts, the CSRF guard, path traversal).</p>
     <p>Contributing: fork it, branch off <code class="inl">main</code>, add a fixture to <code class="inl">test/feed.test.js</code> for any parsing behaviour you change, and open a PR. <code class="inl">node --test</code> must pass.</p>
   </div>

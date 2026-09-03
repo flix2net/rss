@@ -7,6 +7,9 @@ out/
 *.output.json
 *.output.csv
 
+# GitHub Pages artifact, assembled by tools/build-site.js in CI
+site/
+
 # Editors / OS
 .vscode/
 .idea/
