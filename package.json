@@ -40,7 +40,7 @@
     "type": "git",
     "url": "git+https://github.com/flix2net/rss.git"
   },
-  "author": "rss-feed-extractor contributors",
+  "author": "flix2net",
   "bugs": {
     "url": "https://github.com/flix2net/rss/issues"
   },
